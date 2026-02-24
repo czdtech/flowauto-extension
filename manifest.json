@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "FlowAuto",
+  "version": "0.1.0",
+  "description": "Automate Google Flow (DOM-first) with a side panel queue.",
+  "permissions": ["storage", "downloads", "tabs", "activeTab", "sidePanel", "scripting"],
+  "host_permissions": ["https://labs.google/*"],
+  "action": {
+    "default_title": "FlowAuto"
+  },
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/*"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  }
+}
+
