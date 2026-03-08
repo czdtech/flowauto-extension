@@ -1,6 +1,6 @@
 import type { AspectRatio, GenerationMode, TaskItem } from '../../shared/types';
 import { KEYWORDS } from '../selectors';
-import { findModeCombobox, findSettingsButton, findSettingsCombobox } from '../finders';
+import { findModelDropdown, findSettingsToggle } from '../finders';
 import { getElementName, normalizeForMatch } from '../utils/aria';
 import { findAllByRole, forceClick, isVisible, sleep, waitFor } from '../utils/dom';
 
@@ -9,26 +9,117 @@ function keywordMatch(text: string, keywords: readonly string[]): boolean {
   return keywords.some((k) => n.includes(normalizeForMatch(k)));
 }
 
+// ---------------------------------------------------------------------------
+// Settings panel toggle
+// ---------------------------------------------------------------------------
+
+export async function openSettingsPanel(): Promise<void> {
+  let toggle: HTMLButtonElement | null = null;
+  try {
+    toggle = await waitFor(() => findSettingsToggle() || null, { timeoutMs: 15000, intervalMs: 500, debugName: 'findSettingsToggle' });
+  } catch (e) {
+    console.warn('[FlowAuto] 未找到设置面板切换按钮，跳过');
+    return;
+  }
+
+  if (toggle.getAttribute('aria-expanded') === 'true') return;
+
+  console.log('[FlowAuto] 展开设置面板');
+  forceClick(toggle);
+  await waitFor(
+    () => (toggle.getAttribute('aria-expanded') === 'true' ? true : null),
+    { timeoutMs: 3000, intervalMs: 200, debugName: 'open-settings-panel' },
+  );
+  await sleep(200);
+}
+
+// ---------------------------------------------------------------------------
+// Generic tab selection helper
+// ---------------------------------------------------------------------------
+
+async function clickTabByKeywords(keywords: readonly string[]): Promise<void> {
+  await openSettingsPanel();
+
+  const matchers = keywords.map((k) => normalizeForMatch(k));
+  let target: HTMLElement | null = null;
+
+  try {
+    target = await waitFor(() => {
+      const tabs = findAllByRole('tab').filter(isVisible);
+      return tabs.find((t) => {
+        const name = normalizeForMatch(getElementName(t));
+        return matchers.some((k) => name.includes(k));
+      }) || null;
+    }, { timeoutMs: 10000, intervalMs: 500, debugName: `clickTabByKeywords-${keywords.join('-')}` });
+  } catch (e) {
+    const tabs = findAllByRole('tab').filter(isVisible);
+    const found = tabs.map((t) => `"${getElementName(t)}"`).join(', ');
+    throw new Error(`Tab not found: ${keywords.join(' / ')}. Visible tabs: ${found}`);
+  }
+
+  if (target && target.getAttribute('aria-selected') === 'true') return;
+
+  if (target) {
+    forceClick(target);
+    await sleep(400);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mode
+// ---------------------------------------------------------------------------
+
+export async function setMode(mode: GenerationMode): Promise<void> {
+  if (mode === 'create-image') return;
+
+  if (mode === 'text-to-video' || mode === 'frames-first' || mode === 'frames-first-last') {
+    try {
+      await clickTabByKeywords(KEYWORDS.videoModeFrames);
+    } catch {
+      console.log('[FlowAuto] Frames sub-tab not found; may already be default');
+    }
+    return;
+  }
+
+  if (mode === 'ingredients') {
+    await clickTabByKeywords(KEYWORDS.videoModeIngredients);
+    return;
+  }
+
+  console.warn(`[FlowAuto] 模式 "${mode}" 在新 UI 中可能不再可用，跳过模式设置`);
+}
+
+// ---------------------------------------------------------------------------
+// Aspect ratio
+// ---------------------------------------------------------------------------
+
+export async function setAspectRatio(aspectRatio: AspectRatio): Promise<void> {
+  const keywords =
+    aspectRatio === '16:9' ? KEYWORDS.aspectLandscape : KEYWORDS.aspectPortrait;
+  await clickTabByKeywords(keywords);
+}
+
+// ---------------------------------------------------------------------------
+// Output count
+// ---------------------------------------------------------------------------
+
+export async function setOutputCount(outputCount: number): Promise<void> {
+  await clickTabByKeywords([`x${outputCount}`]);
+}
+
+// ---------------------------------------------------------------------------
+// Model (dropdown menu)
+// ---------------------------------------------------------------------------
+
 const POPUP_ITEM_SELECTOR =
   '[role="option"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]';
 
 function queryPopupItems(root: ParentNode): HTMLElement[] {
-  const items = Array.from(root.querySelectorAll<HTMLElement>(POPUP_ITEM_SELECTOR));
-  return items.filter((o) => o.isConnected && isVisible(o));
-}
-
-function distanceBetweenRects(a: DOMRect, b: DOMRect): number {
-  const ax = a.left + a.width / 2;
-  const ay = a.top + a.height / 2;
-  const bx = b.left + b.width / 2;
-  const by = b.top + b.height / 2;
-  const dx = ax - bx;
-  const dy = ay - by;
-  return Math.hypot(dx, dy);
+  return Array.from(root.querySelectorAll<HTMLElement>(POPUP_ITEM_SELECTOR))
+    .filter((o) => o.isConnected && isVisible(o));
 }
 
 function findOpenPopupRoot(anchor: HTMLElement): HTMLElement | null {
-  // Prefer aria-controls/aria-owns when available (most reliable and cheapest).
   const byId =
     (anchor.getAttribute('aria-controls') || anchor.getAttribute('aria-owns'))?.trim() ?? '';
   if (byId) {
@@ -44,27 +135,25 @@ function findOpenPopupRoot(anchor: HTMLElement): HTMLElement | null {
   if (!candidates.length) return null;
   if (candidates.length === 1) return candidates[0];
 
-  // If multiple popups exist, pick the one nearest to the clicked combobox.
   const aRect = anchor.getBoundingClientRect();
   let best: HTMLElement | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-
+  let bestDist = Number.POSITIVE_INFINITY;
   for (const c of candidates) {
-    // Prefer candidates that already contain selectable items.
-    const hasItems = queryPopupItems(c).length > 0;
     const cRect = c.getBoundingClientRect();
-    const dist = distanceBetweenRects(aRect, cRect);
-    const score = dist + (hasItems ? 0 : 10_000);
-    if (score < bestScore) {
-      bestScore = score;
+    const dx = (aRect.left + aRect.width / 2) - (cRect.left + cRect.width / 2);
+    const dy = (aRect.top + aRect.height / 2) - (cRect.top + cRect.height / 2);
+    const dist = Math.hypot(dx, dy);
+    if (dist < bestDist) {
+      bestDist = dist;
       best = c;
     }
   }
-
   return best;
 }
 
-async function waitForPopupItems(anchor: HTMLElement): Promise<{ root: HTMLElement; items: HTMLElement[] }> {
+async function waitForPopupItems(
+  anchor: HTMLElement,
+): Promise<{ root: HTMLElement; items: HTMLElement[] }> {
   return await waitFor(
     () => {
       const root = findOpenPopupRoot(anchor);
@@ -72,150 +161,66 @@ async function waitForPopupItems(anchor: HTMLElement): Promise<{ root: HTMLEleme
       const items = queryPopupItems(root);
       return items.length ? { root, items } : null;
     },
-    // Slower polling + scoped queries drastically reduce CPU vs scanning the full document every 100ms.
-    { timeoutMs: 8000, intervalMs: 200, debugName: 'options' }
+    { timeoutMs: 8000, intervalMs: 200, debugName: 'popup-items' },
   );
 }
 
-async function selectOptionFromCombobox(anchor: HTMLElement, optionKeywords: readonly string[]): Promise<void> {
+async function selectFromPopup(
+  anchor: HTMLElement,
+  optionKeywords: readonly string[],
+): Promise<void> {
   const MAX_ATTEMPTS = 3;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       forceClick(anchor);
-      await sleep(250);
+      await sleep(300);
 
       const { items } = await waitForPopupItems(anchor);
       for (const opt of items) {
         const name = getElementName(opt);
-        if (keywordMatch(name, optionKeywords) || keywordMatch(opt.textContent || '', optionKeywords)) {
+        if (
+          keywordMatch(name, optionKeywords) ||
+          keywordMatch(opt.textContent || '', optionKeywords)
+        ) {
           forceClick(opt);
-          await sleep(250);
+          await sleep(300);
           return;
         }
       }
 
-      const found = items.map((o) => `"${getElementName(o)}" [${o.getAttribute('role')}]`).join(', ');
-      throw new Error(`Option not found: ${optionKeywords.join(' / ')}. Found items: ${found}`);
+      const found = items.map((o) => `"${getElementName(o)}"`).join(', ');
+      throw new Error(`Option not found: ${optionKeywords.join(' / ')}. Found: ${found}`);
     } catch (e) {
       lastError = e;
-      // Best-effort: close any open popup and retry the click (sometimes the first click is swallowed).
       try { (document.activeElement as HTMLElement | null)?.blur(); } catch { /* ignore */ }
       try { document.body.click(); } catch { /* ignore */ }
       await sleep(200);
     }
   }
 
-  // Add extra context to debug why the dropdown didn't open / didn't render roles.
-  const counts = {
-    option: findAllByRole('option').length,
-    menuitem: findAllByRole('menuitem').length,
-    menuitemradio: findAllByRole('menuitemradio').length,
-    menuitemcheckbox: findAllByRole('menuitemcheckbox').length,
-    listbox: findAllByRole('listbox').length,
-    menu: findAllByRole('menu').length,
-  };
-
-  // Keep the original error prefix so logs stay searchable.
   throw new Error(
-    `waitFor timeout (options). roleCounts=${JSON.stringify(counts)}. rootErr=${String(lastError)}`
+    `Model selection failed after ${MAX_ATTEMPTS} attempts. Last: ${String(lastError)}`,
   );
-}
-
-export async function openSettingsPanel(): Promise<void> {
-  const btn = findSettingsButton();
-  const isOpen = (): boolean => {
-    const expanded = btn.getAttribute('aria-expanded');
-    if (expanded === 'true') return true;
-
-    // Some builds don't expose aria-expanded. If any settings combobox is already visible, treat as open.
-    const boxes = findAllByRole('combobox').filter(isVisible);
-    return boxes.some((box) => {
-      const name = getElementName(box);
-      return (
-        keywordMatch(name, KEYWORDS.aspectRatio) ||
-        keywordMatch(name, KEYWORDS.outputCount) ||
-        keywordMatch(name, KEYWORDS.model)
-      );
-    });
-  };
-
-  if (isOpen()) {
-    console.log(`[FlowAuto] 设置面板已展开 (已检测到展开状态)`);
-    return;
-  }
-
-  console.log(`[FlowAuto] 点击打开设置面板`);
-  forceClick(btn);
-  await waitFor(() => (isOpen() ? true : null), {
-    timeoutMs: 2500,
-    intervalMs: 200,
-    debugName: 'open-settings-panel',
-  });
-  await sleep(150);
-}
-
-export async function setMode(mode: GenerationMode): Promise<void> {
-  const box = findModeCombobox();
-
-  const optionKeywords =
-    mode === 'text-to-video'
-      ? KEYWORDS.modeTextToVideo
-      : mode === 'ingredients'
-        ? KEYWORDS.modeIngredients
-        : mode === 'create-image'
-          ? KEYWORDS.modeCreateImage
-          : KEYWORDS.modeFramesToVideo;
-
-  const current = getElementName(box);
-  if (keywordMatch(current, optionKeywords)) {
-    console.log(`[FlowAuto] 当前已是目标模式: ${mode}`);
-    return;
-  }
-
-  console.log(`[FlowAuto] 更改模式为: ${mode}（当前: "${current}"）`);
-  await selectOptionFromCombobox(box, optionKeywords);
-  await sleep(500);
-}
-
-export async function setAspectRatio(aspectRatio: AspectRatio): Promise<void> {
-  await openSettingsPanel();
-
-  const box = findSettingsCombobox('aspectRatio');
-  const current = getElementName(box);
-  if (current.includes(aspectRatio)) return;
-
-  console.log(`[FlowAuto] 更改画幅为: ${aspectRatio}`);
-  await selectOptionFromCombobox(box, [aspectRatio]);
-}
-
-export async function setOutputCount(outputCount: number): Promise<void> {
-  await openSettingsPanel();
-
-  const box = findSettingsCombobox('outputCount');
-  const current = getElementName(box);
-  const desired = String(outputCount);
-  if (current.includes(desired)) return;
-
-  console.log(`[FlowAuto] 更改 outputs 为: ${outputCount}`);
-  await selectOptionFromCombobox(box, [desired]);
 }
 
 function modelOptionKeywords(model: TaskItem['model']): string[] {
   switch (model) {
     case 'veo3.1-fast':
-      return ['Veo 3.1 - Fast', '3.1', 'Fast'];
+      return ['Veo 3.1 - Fast'];
     case 'veo3.1-quality':
-      return ['Veo 3.1 - Quality', '3.1', 'Quality'];
+      return ['Veo 3.1 - Quality'];
     case 'veo2-fast':
-      return ['Veo 2 - Fast', 'Veo 2', 'Fast'];
+      return ['Veo 2 - Fast'];
     case 'veo2-quality':
-      return ['Veo 2 - Quality', 'Veo 2', 'Quality'];
+      return ['Veo 2 - Quality'];
     case 'nano-banana-pro':
-      return ['Nano Banana Pro', 'Banana Pro', '🍌'];
+      return ['Banana Pro'];
+    case 'nano-banana-2':
+      return ['Banana 2'];
     case 'nano-banana':
-      return ['Nano Banana', 'Banana', '🍌'];
+      return ['Banana 2'];
     case 'imagen4':
       return ['Imagen 4', 'Imagen'];
     default:
@@ -226,12 +231,16 @@ function modelOptionKeywords(model: TaskItem['model']): string[] {
 export async function setModel(model: TaskItem['model']): Promise<void> {
   await openSettingsPanel();
 
-  const box = findSettingsCombobox('model');
-  const current = getElementName(box);
+  const dropdown = findModelDropdown();
+  if (!dropdown) {
+    console.warn('[FlowAuto] 未找到模型下拉按钮，跳过模型设置');
+    return;
+  }
+
+  const currentName = getElementName(dropdown);
   const desiredKeywords = modelOptionKeywords(model);
-  if (keywordMatch(current, desiredKeywords)) return;
+  if (keywordMatch(currentName, desiredKeywords)) return;
 
   console.log(`[FlowAuto] 更改模型为: ${model}`);
-  await selectOptionFromCombobox(box, desiredKeywords);
+  await selectFromPopup(dropdown, desiredKeywords);
 }
-

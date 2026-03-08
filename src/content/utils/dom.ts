@@ -20,8 +20,9 @@ export function scrollIntoView(el: Element): void {
 
 export function forceClick(el: Element): void {
   if (!(el instanceof HTMLElement)) return;
-  // Some UI components (e.g. Radix) rely on Pointer Events, not just Mouse Events.
-  // Dispatch a realistic sequence once (avoid double-click bugs).
+  try {
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  } catch { /* ignore */ }
   try {
     el.focus();
   } catch {
@@ -32,6 +33,22 @@ export function forceClick(el: Element): void {
   const clientY = rect.top + rect.height / 2;
 
   const common = { bubbles: true, cancelable: true, composed: true, clientX, clientY };
+
+  // Touch events first (some mobile-first / Material frameworks rely on these)
+  try {
+    const touch = new Touch({
+      identifier: 1,
+      target: el,
+      clientX,
+      clientY,
+      pageX: clientX + window.scrollX,
+      pageY: clientY + window.scrollY,
+    });
+    el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true, composed: true, touches: [touch], targetTouches: [touch], changedTouches: [touch] }));
+    el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, composed: true, touches: [], targetTouches: [], changedTouches: [touch] }));
+  } catch {
+    // Touch API not available or failed — skip
+  }
 
   const dispatchPointerLike = (type: string, buttons: number): void => {
     // Prefer real PointerEvent when available; otherwise fall back to dispatching a MouseEvent
@@ -60,13 +77,177 @@ export function forceClick(el: Element): void {
   el.dispatchEvent(new MouseEvent('click', { ...common, button: 0 }));
 }
 
-export function typeReactTextarea(textarea: HTMLTextAreaElement, value: string): void {
-  textarea.focus();
-  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-  if (nativeSetter) nativeSetter.call(textarea, value);
-  else textarea.value = value;
-  textarea.dispatchEvent(new Event('input', { bubbles: true }));
-  textarea.dispatchEvent(new Event('change', { bubbles: true }));
+// ---------------------------------------------------------------------------
+// Text Injection – Multi-strategy pipeline
+// ---------------------------------------------------------------------------
+
+/** React native setter for <textarea>/<input>. */
+function tryReactNativeSetter(el: HTMLElement, value: string): boolean {
+  const tag = el.tagName.toLowerCase();
+  const proto =
+    tag === 'textarea' ? HTMLTextAreaElement.prototype :
+    tag === 'input' ? HTMLInputElement.prototype : null;
+  if (!proto) return false;
+
+  const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+  if (!descriptor?.set) return false;
+
+  descriptor.set.call(el, value);
+  el.dispatchEvent(new InputEvent('input', {
+    bubbles: true, cancelable: false, inputType: 'insertText', data: value,
+  }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const tracker = (el as any)._valueTracker;
+  if (tracker && typeof tracker.setValue === 'function') {
+    tracker.setValue('');
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// ContentEditable strategies (ordered by reliability for Google Flow)
+// ---------------------------------------------------------------------------
+
+function selectAllContent(el: HTMLElement): void {
+  el.focus();
+  const sel = window.getSelection();
+  if (sel) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+/**
+ * Primary strategy: InputEvent with insertFromPaste.
+ * Google Flow's Next.js editor handles beforeinput with 'insertFromPaste'
+ * and updates its internal state correctly.
+ */
+async function tryInsertFromPaste(el: HTMLElement, value: string): Promise<boolean> {
+  if (!el.isContentEditable) return false;
+  selectAllContent(el);
+  try {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', value);
+    el.dispatchEvent(new InputEvent('beforeinput', {
+      bubbles: true, cancelable: true, inputType: 'insertFromPaste', dataTransfer: dt,
+    }));
+    await sleep(100);
+    // Follow-up input event to finalize editor state
+    el.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: false, inputType: 'insertFromPaste',
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Fallback: ClipboardEvent paste simulation. */
+async function tryClipboardPaste(el: HTMLElement, value: string): Promise<boolean> {
+  if (!el.isContentEditable) return false;
+  selectAllContent(el);
+  try {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', value);
+    el.dispatchEvent(new ClipboardEvent('paste', {
+      bubbles: true, cancelable: true, clipboardData: dt,
+    }));
+    await sleep(100);
+    // Follow-up input event for editors that handle paste separately
+    el.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: false, inputType: 'insertFromPaste',
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Last resort: execCommand insertText (trusted events, but editor may ignore). */
+function tryExecCommand(el: HTMLElement, value: string): boolean {
+  if (!el.isContentEditable) return false;
+  selectAllContent(el);
+  const ok = document.execCommand('insertText', false, value);
+  // Dispatch compositionend for IME-aware editors
+  el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: value }));
+  return ok && !!el.textContent?.includes(value.substring(0, 10));
+}
+
+/** Per-character keyboard simulation for <textarea>/<input>. */
+function tryPerCharacterSimulation(el: HTMLElement, value: string): boolean {
+  if (!('value' in el)) return false;
+  el.focus();
+  (el as any).value = '';
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    const keyOpts: KeyboardEventInit = {
+      key: char, code: '', bubbles: true, cancelable: true, composed: true,
+    };
+    el.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+    (el as any).value += char;
+    el.dispatchEvent(new InputEvent('input', {
+      bubbles: true, cancelable: false, inputType: 'insertText', data: char,
+    }));
+    el.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+  }
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+function verifyInjection(el: HTMLElement, value: string): boolean {
+  const actual =
+    'value' in el ? String((el as any).value) :
+    el.isContentEditable ? (el.textContent || '') : '';
+  const snippet = value.substring(0, 20);
+  if (!actual.includes(snippet)) return false;
+
+  if (el.isContentEditable) {
+    const placeholder = el.getAttribute('aria-label') || '';
+    if (placeholder && actual.includes(placeholder)) return false;
+  }
+  return true;
+}
+
+/**
+ * Main entry point: try strategies in order until one succeeds.
+ */
+export async function typeInputElement(el: HTMLElement, value: string): Promise<void> {
+  el.focus();
+
+  // <textarea> / <input>: React native setter → per-char fallback
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+    if (tryReactNativeSetter(el, value) && verifyInjection(el, value)) return;
+    if (tryPerCharacterSimulation(el, value)) return;
+    return;
+  }
+
+  // contentEditable: insertFromPaste → clipboard paste → execCommand
+  if (el.isContentEditable) {
+    await tryInsertFromPaste(el, value);
+    if (verifyInjection(el, value)) return;
+
+    await tryClipboardPaste(el, value);
+    if (verifyInjection(el, value)) return;
+
+    tryExecCommand(el, value);
+    if (verifyInjection(el, value)) return;
+
+    console.error(`[FlowAuto] ❌ 所有 contentEditable 策略均失败`);
+    return;
+  }
+
+  // Unknown element type
+  (el as any).value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** @deprecated Use typeInputElement. */
+export async function typeReactTextarea(textarea: HTMLTextAreaElement, value: string): Promise<void> {
+  await typeInputElement(textarea, value);
 }
 
 export async function waitFor<T>(

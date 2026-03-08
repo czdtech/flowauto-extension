@@ -234,7 +234,7 @@ async function handleQueueGetState(_req: QueueGetStateRequest): Promise<QueueSta
 }
 
 async function handleQueueAddTasks(req: QueueAddTasksRequest): Promise<QueueStateResponse> {
-  const state = await addPrompts(req.prompts ?? [], { modeOverride: req.modeOverride });
+  const state = await addPrompts(req.prompts ?? []);
   return { type: MSG.QUEUE_STATE, ...state };
 }
 

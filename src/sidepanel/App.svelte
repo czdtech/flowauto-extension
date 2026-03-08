@@ -19,6 +19,7 @@
     QueueStateResponse,
     SettingsUpdateRequest,
   } from '../shared/protocol';
+  import { isImageModel, modeForModel } from '../shared/types';
   import type { GenerationMode, QueueState, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
@@ -60,11 +61,10 @@
     return !!t.logs && t.logs.length > 0;
   }
 
-  let s_defaultMode: GenerationMode = 'text-to-video';
+  let s_defaultModel: UserSettings['defaultModel'] = 'veo3.1-quality';
   let s_defaultAspectRatio: '16:9' | '9:16' = '9:16';
   let s_defaultOutputCount = 1;
-  let s_defaultVeoModel: UserSettings['defaultVeoModel'] = 'veo3.1-quality';
-  let s_defaultImageModel: UserSettings['defaultImageModel'] = 'nano-banana-pro';
+  let s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'] = '2K/1080p';
   let s_interTaskDelayMs = 5000;
 
   function sendMessage<TReq, TRes>(message: TReq): Promise<TRes> {
@@ -106,13 +106,12 @@
 
   $: showImageControls =
     activeTopTab === 'image' ||
-    (activeTopTab === 'unknown' && s_defaultMode === 'create-image');
+    (activeTopTab === 'unknown' && isImageModel(s_defaultModel));
 
   $: effectiveModeForAdd = ((): GenerationMode => {
     if (activeTopTab === 'image') return 'create-image';
-    if (activeTopTab === 'video')
-      return s_defaultMode === 'create-image' ? 'text-to-video' : s_defaultMode;
-    return s_defaultMode;
+    if (activeTopTab === 'video') return 'text-to-video';
+    return modeForModel(s_defaultModel);
   })();
 
   async function refreshPageState(): Promise<void> {
@@ -175,11 +174,10 @@
 
   function syncSettingsDraft(next: UserSettings | null): void {
     if (!next) return;
-    s_defaultMode = next.defaultMode;
+    s_defaultModel = next.defaultModel;
     s_defaultAspectRatio = next.defaultAspectRatio;
     s_defaultOutputCount = next.defaultOutputCount;
-    s_defaultVeoModel = next.defaultVeoModel;
-    s_defaultImageModel = next.defaultImageModel;
+    s_defaultDownloadResolution = next.defaultDownloadResolution;
     s_interTaskDelayMs = next.interTaskDelayMs;
   }
 
@@ -446,34 +444,40 @@
             </select>
           </label>
 
-          {#if showImageControls}
-            <label>
-              <div class="lab">图片模型</div>
-              <select
-                class="sel"
-                bind:value={s_defaultImageModel}
-                onchange={() => patchSettings({ defaultImageModel: s_defaultImageModel })}
-              >
+          <label>
+            <div class="lab">模型</div>
+            <select
+              class="sel"
+              bind:value={s_defaultModel}
+              onchange={() => patchSettings({ defaultModel: s_defaultModel })}
+            >
+              <optgroup label="视频与动画">
+                <option value="veo3.1-quality">Veo 3.1 - Quality</option>
+                <option value="veo3.1-fast">Veo 3.1 - Fast</option>
+                <option value="veo2-quality">Veo 2 - Quality</option>
+                <option value="veo2-fast">Veo 2 - Fast</option>
+              </optgroup>
+              <optgroup label="图像生成">
                 <option value="nano-banana-pro">Nano Banana Pro</option>
+                <option value="nano-banana-2">Nano Banana 2</option>
                 <option value="nano-banana">Nano Banana</option>
                 <option value="imagen4">Imagen 4</option>
-              </select>
-            </label>
-          {:else}
-            <label>
-              <div class="lab">视频模型</div>
-              <select
-                class="sel"
-                bind:value={s_defaultVeoModel}
-                onchange={() => patchSettings({ defaultVeoModel: s_defaultVeoModel })}
-              >
-                <option value="veo3.1-fast">Veo 3.1 - Fast</option>
-                <option value="veo3.1-quality">Veo 3.1 - Quality</option>
-                <option value="veo2-fast">Veo 2 - Fast</option>
-                <option value="veo2-quality">Veo 2 - Quality</option>
-              </select>
-            </label>
-          {/if}
+              </optgroup>
+            </select>
+          </label>
+
+          <label>
+            <div class="lab">下载画质</div>
+            <select
+              class="sel"
+              bind:value={s_defaultDownloadResolution}
+              onchange={() => patchSettings({ defaultDownloadResolution: s_defaultDownloadResolution })}
+            >
+              <option value="1K/720p">1K / 720p</option>
+              <option value="2K/1080p">2K / 1080p</option>
+              <option value="4K">4K (需升级)</option>
+            </select>
+          </label>
 
           <label>
             <div class="lab">间隔(ms)</div>

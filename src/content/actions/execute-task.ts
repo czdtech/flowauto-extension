@@ -1,7 +1,7 @@
 import { MSG } from '../../shared/constants';
 import type { TaskItem } from '../../shared/types';
 import { buildProjectDir, buildTaskBaseName } from '../../shared/filename-utils';
-import { downloadTopNLatestWithNaming, type MediaType } from './download';
+import { downloadTopNLatestWithNaming } from './download';
 import { createAndWaitForGeneration } from './generate';
 import { setPromptText } from './prompt';
 import { setAspectRatio, setMode, setModel, setOutputCount } from './settings';
@@ -9,7 +9,7 @@ import { getProjectName } from '../page-state';
 import { sleep } from '../utils/dom';
 import { selectTab } from './navigate';
 
-function mediaTypeForTask(task: TaskItem): MediaType {
+function mediaTypeForTask(task: TaskItem): 'image' | 'video' {
   return task.mode === 'create-image' ? 'image' : 'video';
 }
 
@@ -34,21 +34,20 @@ export async function executeTask(task: TaskItem): Promise<{ downloadedCount: nu
 
   log(`切换到 ${mediaType === 'image' ? '图片' : '视频'} 标签页`);
   await selectTab(mediaType === 'image' ? 'image' : 'video');
-  await sleep(800);
+  await sleep(300);
 
   log(`设置生成模式: ${task.mode}`);
   await setMode(task.mode);
-  await sleep(600);
+  await sleep(200);
 
   log(`设置画幅 ${task.aspectRatio}, 数量 ${task.outputCount}, 模型 ${task.model}`);
   await setAspectRatio(task.aspectRatio);
   await setOutputCount(task.outputCount);
   await setModel(task.model);
-  await sleep(200);
+  await sleep(100);
 
   log(`输入提示词`);
-  setPromptText(task.prompt);
-  await sleep(300);
+  await setPromptText(task.prompt);
 
   log(`点击创建，等待生成...`);
   const result = await createAndWaitForGeneration({
@@ -65,7 +64,7 @@ export async function executeTask(task: TaskItem): Promise<{ downloadedCount: nu
   const projectName = getProjectName() ?? 'Flow';
   const dir = buildProjectDir(projectName);
 
-  await downloadTopNLatestWithNaming(mediaType, newCount, (outputIndex) => {
+  await downloadTopNLatestWithNaming(task, newCount, (outputIndex) => {
     const baseCore = buildTaskBaseName(task, outputIndex);
     const idTail = task.id.slice(-6);
     return {

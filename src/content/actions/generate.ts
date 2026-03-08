@@ -54,15 +54,17 @@ export async function clickCreate(): Promise<void> {
 }
 
 /**
- * Wait for generation to complete using two independent signals:
+ * Wait for generation to complete using multiple signals:
  *
- *   Signal A (button): Create button re-enabled after being disabled.
+ *   Signal A (button): Create button re-enabled AFTER being disabled.
+ *                       Only fires if the button was observed as disabled at
+ *                       least once (the new Flow UI may keep the button enabled
+ *                       throughout generation).
  *   Signal B (stability): New image URL count reached expectedCount AND
  *                         has been unchanged for STABLE_REQUIRED consecutive
- *                         polls (= STABLE_REQUIRED * intervalMs ms).
- *
- * Either signal alone can declare completion. Signal B prevents the 120 s
- * timeout when Flow leaves the button disabled after generation finishes.
+ *                         polls.
+ *   Signal C (loading): No loading/progress indicators remain AND at least
+ *                       one new image has appeared.
  *
  * Returns baselineUrls so the download step can distinguish new from old.
  */
@@ -77,7 +79,7 @@ export async function waitForGenerationComplete(
 
   console.log(`[FlowAuto] 等待生成完成: 基线图片URL数=${baselineUrls.size}, 期望新增=${expectedCount}, 超时=${timeoutMs}ms`);
 
-  // Give the request time to reach Flow's server and the button to go disabled.
+  // Give the request time to reach Flow's server.
   await sleep(3000);
 
   const STABLE_REQUIRED = 3; // 3 consecutive unchanged polls = ~6 s stable
@@ -85,6 +87,9 @@ export async function waitForGenerationComplete(
   let lastNewCount = -1;
   let logTimer = 0;
   let tick = 0;
+  let buttonWasDisabled = false;
+  // Signal D sets this flag instead of throwing, so waitFor exits immediately.
+  let generationError: string | null = null;
 
   const recordImg = (img: HTMLImageElement): void => {
     if (!img.isConnected) return;
@@ -98,7 +103,6 @@ export async function waitForGenerationComplete(
       return;
     }
 
-    // Keep a small pending set so we can "promote" images that were 0x0 while loading.
     if (pendingImgs.size < 200) pendingImgs.add(img);
   };
 
@@ -109,7 +113,6 @@ export async function waitForGenerationComplete(
     }
     if (!(node instanceof Element)) return;
     const imgs = node.querySelectorAll<HTMLImageElement>('img');
-    // Avoid worst-case spikes if a large subtree is injected; a periodic resync covers misses.
     let seen = 0;
     for (const img of imgs) {
       recordImg(img);
@@ -118,11 +121,78 @@ export async function waitForGenerationComplete(
     }
   };
 
+  /**
+   * Check if a newly added DOM node (or its subtree) contains failure text.
+   * This is called from the MutationObserver callback, so it only runs on
+   * NEW mutations — old failure cards from prior tasks are never checked.
+   * We check text length to avoid matching huge parent containers that get
+   * re-rendered; real failure cards have short, specific text.
+   */
+  const checkNodeForFailure = (node: Node): void => {
+    if (generationError) return; // already detected
+    if (!(node instanceof HTMLElement)) return;
+    // Only check after initial render stabilizes (tick >= 3 is checked in the poll)
+    if (tick < 3) return;
+
+    const text = node.textContent || '';
+    // Real failure cards have bounded text content (< 500 chars).
+    // Huge containers (toolbar, gallery) have thousands of characters.
+    if (text.length > 500 || text.length < 4) return;
+
+    if (text.includes('失败') && (text.includes('政策') || text.includes('违反'))) {
+      // Verify the element is visible and card-sized (not a tiny hidden span)
+      const rect = node.getBoundingClientRect();
+      if (rect.width > 50 && rect.height > 50) {
+        console.error(`[FlowAuto] ❌ 信号D(MutationObserver): 检测到新失败卡片: "${text.substring(0, 100)}"`);
+        generationError = `生成失败（内容策略）: ${text.substring(0, 100)}`;
+      }
+    }
+  };
+
+  /**
+   * Detect if the page is currently showing loading/progress indicators.
+   * This handles the new Flow UI that uses progress bars or loading animations
+   * instead of disabling the Create button.
+   */
+  const hasLoadingIndicators = (): boolean => {
+    // Check for common loading patterns:
+    // 1. Progress bars (circular or linear)
+    const progressBars = document.querySelectorAll(
+      '[role="progressbar"], [aria-busy="true"], .loading, [class*="progress"], [class*="loading"], [class*="spinner"]'
+    );
+    for (const el of progressBars) {
+      if (el instanceof HTMLElement && el.offsetWidth > 0 && el.offsetHeight > 0) {
+        return true;
+      }
+    }
+
+    // 2. Elements with percentage text (e.g., "48%")
+    // Check image cards specifically for progress overlays
+    const cards = document.querySelectorAll('img');
+    for (const img of cards) {
+      const parent = img.closest('[class]');
+      if (!parent) continue;
+      const siblings = parent.querySelectorAll('*');
+      for (const sib of siblings) {
+        const text = (sib.textContent || '').trim();
+        if (/^\d{1,3}\s*%$/.test(text) && sib instanceof HTMLElement && sib.offsetWidth > 0) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
   try {
     observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         if (m.type === 'childList') {
-          for (const n of m.addedNodes) scanNodeForImgs(n);
+          for (const n of m.addedNodes) {
+            scanNodeForImgs(n);
+            // Signal D: check newly added nodes for failure text
+            checkNodeForFailure(n);
+          }
         } else if (m.type === 'attributes' && m.target instanceof HTMLImageElement) {
           recordImg(m.target);
         }
@@ -135,7 +205,7 @@ export async function waitForGenerationComplete(
       attributeFilter: ['src', 'srcset'],
     });
   } catch {
-    // Best-effort: if MutationObserver fails for any reason, we still have the polling resync below.
+    // Best-effort
   }
 
   try {
@@ -143,7 +213,12 @@ export async function waitForGenerationComplete(
       () => {
         tick++;
 
-        // Promote pending images that become "real" thumbnails after load/layout.
+        // Signal D (immediate): if MutationObserver detected failure, exit now.
+        if (generationError) {
+          return true;
+        }
+
+        // Promote pending images.
         if (pendingImgs.size) {
           for (const img of Array.from(pendingImgs)) {
             if (!img.isConnected) { pendingImgs.delete(img); continue; }
@@ -151,7 +226,7 @@ export async function waitForGenerationComplete(
           }
         }
 
-        // Low-frequency full resync keeps Signal B robust even if we miss some mutations.
+        // Low-frequency full resync.
         if (tick % 4 === 0) {
           const currentUrls = collectResultImageSrcs();
           for (const u of currentUrls) {
@@ -161,12 +236,18 @@ export async function waitForGenerationComplete(
 
         const newCount = newUrls.size;
 
-        // Signal A: button re-enabled.
+        // Signal A: button was disabled and is now re-enabled.
+        // IMPORTANT: Only fire if we previously observed the button as disabled.
+        // In the new Flow UI, the button may NEVER become disabled.
         try {
           const btn = findCreateButton();
           const disabled = btn.disabled || btn.getAttribute('aria-disabled') === 'true';
-          if (!disabled) {
-            console.log(`[FlowAuto] ✅ 信号A: 创建按钮已恢复可用，新图片URL: ${newCount}`);
+          if (disabled) {
+            buttonWasDisabled = true;
+            console.log(`[FlowAuto] 信号A: 创建按钮已变为 disabled`);
+          } else if (buttonWasDisabled) {
+            // Button was disabled and is now re-enabled — generation complete
+            console.log(`[FlowAuto] ✅ 信号A: 创建按钮从 disabled 恢复为可用，新图片URL: ${newCount}`);
             return true;
           }
         } catch {
@@ -190,9 +271,16 @@ export async function waitForGenerationComplete(
           lastNewCount = newCount;
         }
 
+        // Signal C: no loading indicators remain AND at least one new image exists.
+        // This handles the case where the button never becomes disabled.
+        if (!buttonWasDisabled && newCount > 0 && !hasLoadingIndicators()) {
+          console.log(`[FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(${newCount}), 视为完成`);
+          return true;
+        }
+
         logTimer++;
-        if (logTimer % 2 === 0) {
-          console.log(`[FlowAuto] 生成中... 新图片URL: ${newCount}/${expectedCount}, 稳定计数: ${stableCount}/${STABLE_REQUIRED}`);
+        if (logTimer % 3 === 0) {
+          console.log(`[FlowAuto] 生成中... 新图片: ${newCount}/${expectedCount}, 稳定: ${stableCount}/${STABLE_REQUIRED}`);
         }
 
         return null;
@@ -201,6 +289,11 @@ export async function waitForGenerationComplete(
     );
   } finally {
     observer?.disconnect();
+  }
+
+  // If Signal D detected a failure, throw now (outside waitFor so it propagates).
+  if (generationError) {
+    throw new Error(generationError);
   }
 
   // Brief stabilization before download.

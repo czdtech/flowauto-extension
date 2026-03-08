@@ -13,10 +13,28 @@ export type GenerationMode =
   | 'camera-control';
 
 export type VeoModel = 'veo2-fast' | 'veo2-quality' | 'veo3.1-fast' | 'veo3.1-quality';
-export type ImageModel = 'nano-banana' | 'nano-banana-pro' | 'imagen4';
+export type ImageModel = 'nano-banana' | 'nano-banana-2' | 'nano-banana-pro' | 'imagen4';
 export type AnyModel = VeoModel | ImageModel;
 
+/** Returns true if the model generates images (as opposed to videos). */
+export function isImageModel(model: AnyModel): boolean {
+  return model === 'nano-banana' || model === 'nano-banana-2' || model === 'nano-banana-pro' || model === 'imagen4';
+}
+
+/** Map a model to its natural GenerationMode. */
+export function modeForModel(model: AnyModel): GenerationMode {
+  return isImageModel(model) ? 'create-image' : 'text-to-video';
+}
+
 export type AspectRatio = '16:9' | '9:16';
+
+/**
+ * Unified download resolution selection.
+ * '1K/720p' → 1K for images, 720p for videos.
+ * '2K/1080p' → 2K for images, 1080p for videos.
+ * '4K' → 4K for both (requires upgraded tier).
+ */
+export type DownloadResolution = '1K/720p' | '2K/1080p' | '4K';
 
 export type TaskStatus = 'waiting' | 'running' | 'downloading' | 'success' | 'error' | 'skipped';
 
@@ -44,6 +62,7 @@ export interface TaskItem {
   retries: number;
   maxRetries: number;
   errorMessage?: string;
+  downloadResolution?: DownloadResolution;
   logs?: TaskLogEntry[];
   assets?: TaskAsset[];
   createdAt: number;
@@ -59,21 +78,19 @@ export interface QueueState {
 }
 
 export interface UserSettings {
-  defaultMode: GenerationMode;
-  defaultVeoModel: VeoModel;
-  defaultImageModel: ImageModel;
+  defaultModel: AnyModel;
   defaultAspectRatio: AspectRatio;
   defaultOutputCount: number;
   interTaskDelayMs: number;
+  defaultDownloadResolution: DownloadResolution;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  defaultMode: 'text-to-video',
-  defaultVeoModel: 'veo3.1-quality',
-  defaultImageModel: 'nano-banana-pro',
+  defaultModel: 'veo3.1-quality',
   defaultAspectRatio: '9:16',
   defaultOutputCount: 1,
   interTaskDelayMs: 5000,
+  defaultDownloadResolution: '2K/1080p',
 };
 
 export const DEFAULT_QUEUE_STATE: QueueState = {
@@ -85,4 +102,3 @@ export interface ParsedPromptItem {
   filename?: string;
   prompt: string;
 }
-

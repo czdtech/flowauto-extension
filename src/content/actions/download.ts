@@ -1,7 +1,8 @@
 import { MSG } from '../../shared/constants';
-import { sleep } from '../utils/dom';
-
-export type MediaType = 'image' | 'video';
+import { isVisible, sleep } from '../utils/dom';
+import { querySelectorAllDeep } from '../finders';
+import type { TaskItem } from '../../shared/types';
+import { SELECTORS, KEYWORDS } from '../selectors';
 
 export interface DownloadNamingHint {
   dir: string;
@@ -13,7 +14,6 @@ export interface DownloadNamingHint {
 const MIN_RESULT_PX = 80;
 
 function isLikelyResultThumbnail(img: HTMLImageElement): boolean {
-  // Prefer natural size (no layout), fall back to rendered size.
   const nw = img.naturalWidth || 0;
   const nh = img.naturalHeight || 0;
   if (nw >= MIN_RESULT_PX && nh >= MIN_RESULT_PX) return true;
@@ -23,127 +23,350 @@ function isLikelyResultThumbnail(img: HTMLImageElement): boolean {
   return w >= MIN_RESULT_PX && h >= MIN_RESULT_PX;
 }
 
-/**
- * Given an <img> element, walk up the DOM tree to find the card wrapper.
- * A "card" is the nearest ancestor that contains at least 2 buttons
- * (overlay action buttons like download, favorite, etc.).
- */
-function findCardWrapper(img: HTMLImageElement): Element | null {
-  let el: Element | null = img.parentElement;
-  let depth = 0;
-  while (el && el !== document.body && depth < 12) {
-    if (el.getElementsByTagName('button').length >= 2) return el;
-    el = el.parentElement;
-    depth++;
-  }
-  return null;
+function getTrackableUrl(img: HTMLImageElement): string | null {
+  const src = img.currentSrc || img.src;
+  if (!src || src.startsWith('data:')) return null;
+  return src;
 }
 
-/**
- * Get all result image cards sorted by DOM order (newest first in Flow's grid).
- */
-function getResultCards(): { img: HTMLImageElement; card: Element }[] {
+// Find cards by just grabbing the images. We'll find their buttons later by crawling up.
+function getNewGenerationImages(baselineUrls: Set<string>): HTMLImageElement[] {
   const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('img'));
-  const results: { img: HTMLImageElement; card: Element }[] = [];
-  const seenCards = new Set<Element>();
+  const newImgs: HTMLImageElement[] = [];
+  const seenUrls = new Set<string>();
 
   for (const img of imgs) {
     if (!img.isConnected) continue;
-    if (!img.src || img.src.startsWith('data:')) continue;
+    const src = getTrackableUrl(img);
+    if (!src) continue;
     if (!isLikelyResultThumbnail(img)) continue;
+    if (seenUrls.has(src)) continue;
+    seenUrls.add(src);
 
-    const card = findCardWrapper(img);
-    if (card && !seenCards.has(card)) {
-      seenCards.add(card);
-      results.push({ img, card });
+    if (baselineUrls.has(src)) continue;
+
+    newImgs.push(img);
+  }
+
+  return newImgs;
+}
+
+// Extract download buttons from specific cards, or fallback to all download buttons.
+async function getGridDownloadButtons(baselineUrls?: Set<string>): Promise<{btn: HTMLButtonElement, img: HTMLImageElement}[]> {
+  const results: {btn: HTMLButtonElement, img: HTMLImageElement}[] = [];
+
+  if (baselineUrls && baselineUrls.size > 0) {
+    const newImgs = getNewGenerationImages(baselineUrls);
+    if (newImgs.length > 0) {
+      for (const img of newImgs) {
+        // Trigger hover on img and its first 4 ancestors to ensure buttons render in React
+        let current: HTMLElement | null = img;
+        for (let i = 0; i < 4; i++) {
+            if (!current || current === document.body) break;
+            current.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+            current.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+            current = current.parentElement;
+        }
+        await sleep(500); // UI stabilization after hover
+
+        // Find the card container (the highest ancestor we hovered, or just search up to 4 levels)
+        let searchRoot: HTMLElement | null = img;
+        for (let i = 0; i < 4; i++) {
+           if (searchRoot?.parentElement && searchRoot.parentElement !== document.body) {
+               searchRoot = searchRoot.parentElement;
+           }
+        }
+        
+        if (!searchRoot) searchRoot = document.body;
+        
+        console.log(`[FlowAuto Debug] searchRoot tag: ${searchRoot.tagName}, class: ${searchRoot.className}`);
+        const allMenuBtns = querySelectorAllDeep<HTMLButtonElement>('button[aria-haspopup="menu"]', searchRoot);
+        console.log(`[FlowAuto Debug] Found ${allMenuBtns.length} menu buttons in searchRoot.`);
+
+        // First try: standard direct download button (might not have aria-haspopup, so just search button)
+        let btn = querySelectorAllDeep<HTMLButtonElement>('button', searchRoot).find((b: HTMLButtonElement) => {
+          if (!isVisible(b)) return false;
+          const name = (b.getAttribute('name') ?? '').toLowerCase();
+          const text = (b.textContent || '').toLowerCase();
+          return name.includes('下载') || name.includes('download') || text === '下载' || text === 'download';
+        });
+        
+        // Follow-up: For models like Nano Banana Pro, there is no direct download button.
+        // It's hidden behind the "更多" (more_vert) button.
+        if (!btn) {
+           btn = allMenuBtns.find((b: HTMLButtonElement) => {
+             const vis = isVisible(b);
+             const text = (b.textContent || '').toLowerCase();
+             console.log(`[FlowAuto Debug] Checking button: visible=${vis}, text=${text}`);
+             if (!vis) return false;
+             return text.includes('更多') || text.includes('more');
+           });
+        }
+
+        if (btn) results.push({btn, img});
+      }
+      if (results.length > 0) return results;
     }
   }
 
-  return results;
+  // Fallback: grab all visible download buttons
+  const buttons = querySelectorAllDeep<HTMLButtonElement>(SELECTORS.downloadButtons);
+  const fallbackResults = buttons.filter((b: HTMLButtonElement) => {
+    if (!isVisible(b)) return false;
+    const name = (b.getAttribute('name') ?? '').toLowerCase();
+    const keywords = KEYWORDS.download || ['下载', 'download'];
+    return keywords.some((k: string) => name.includes(k.toLowerCase()));
+  });
+  
+  return fallbackResults.map(btn => ({ btn, img: btn as unknown as HTMLImageElement })); // img is fake here, fallback path doesn't strictly need it in identical way
 }
 
-/**
- * Download images by directly extracting img.src and sending to background
- * for chrome.downloads.download(). This completely bypasses the hover/overlay
- * complexity that was causing unreliable downloads.
- */
 export async function downloadTopNLatestWithNaming(
-  mediaType: MediaType,
+  task: TaskItem,
   n: number,
   naming: (outputIndex: number) => DownloadNamingHint,
   baselineUrls?: Set<string>
 ): Promise<void> {
-  if (mediaType === 'image') {
-    await downloadImagesDirectly(n, naming, baselineUrls);
-  } else {
-    await downloadVideosFallback(n, naming);
-  }
-}
+  console.log(`[FlowAuto Debug] downloadTopNLatestWithNaming started for task: ${task.id}, n=${n}, mode=${task.mode}, dl_res=${task.downloadResolution}`);
+  const isImage = task.mode === 'create-image';
 
-async function downloadImagesDirectly(
-  n: number,
-  naming: (outputIndex: number) => DownloadNamingHint,
-  baselineUrls?: Set<string>
-): Promise<void> {
-  const cards = getResultCards();
-
-  let targets: { img: HTMLImageElement; card: Element }[];
-  if (baselineUrls && baselineUrls.size > 0) {
-    const newCards = cards.filter(c => !baselineUrls.has(c.img.src));
-    console.log(`[FlowAuto] 找到 ${cards.length} 张卡片，其中 ${newCards.length} 张为新生成，下载前 ${n} 张`);
-    targets = newCards.slice(0, n);
+  // Resolve the unified DownloadResolution into the correct keyword for the menu
+  let targetRes: string;
+  const dl = task.downloadResolution ?? '2K/1080p';
+  if (dl === '4K') {
+    targetRes = '4K';
+  } else if (isImage) {
+    targetRes = dl === '1K/720p' ? '1K' : '2K';
   } else {
-    console.log(`[FlowAuto] 找到 ${cards.length} 张卡片（无基线），下载最后 ${n} 张`);
-    targets = cards.slice(-n);
+    targetRes = dl === '1K/720p' ? '720p' : '1080p';
   }
 
-  if (targets.length === 0) {
-    console.warn(`[FlowAuto] 未找到任何图片卡片，跳过下载`);
+  let buttonPairs = await getGridDownloadButtons(baselineUrls);
+  console.log(`[FlowAuto Debug] Target Resolution: ${targetRes}, Found Buttons at start: ${buttonPairs.length}`);
+
+  // Flow grid displays newest items first. Take the first `n` buttons.
+  if (buttonPairs.length > n) {
+    buttonPairs = buttonPairs.slice(0, n);
+  }
+
+  if (buttonPairs.length === 0) {
+    if (baselineUrls && baselineUrls.size > 0) {
+      const newImgs = getNewGenerationImages(baselineUrls);
+      if (newImgs.length > 0) {
+        console.warn(`[FlowAuto Debug] ⚠️ 未找到包含 '下载/download' 的按钮。尝试直接通过新卡片的图片URL下载...`);
+        const imgsToDownload = newImgs.length > n ? newImgs.slice(0, n) : newImgs;
+        let downloadedCount = 0;
+
+        for (let i = 0; i < imgsToDownload.length; i++) {
+          const img = imgsToDownload[i];
+          const hint = naming(i + 1);
+          const src = getTrackableUrl(img);
+
+          if (src) {
+            console.log(`[FlowAuto Debug] 提取到图片URL: ${src}，发起 DOWNLOAD_BY_URL`);
+            await chrome.runtime.sendMessage({
+              type: MSG.DOWNLOAD_BY_URL,
+              url: src,
+              dir: hint.dir,
+              baseName: hint.baseName,
+            });
+            downloadedCount++;
+            await sleep(1500);
+          }
+        }
+        
+        if (downloadedCount > 0) {
+          console.log(`[FlowAuto] ✅ 成功回退通过URL下载 ${downloadedCount}/${imgsToDownload.length} 项`);
+          return;
+        }
+      }
+    }
+
+    console.warn(`[FlowAuto] ⚠️ 无可用下载按钮且未能提取到图片URL，跳过下载。`);
     return;
   }
 
-  let downloaded = 0;
+  console.log(`[FlowAuto Debug] 准备下载 ${buttonPairs.length} 项，目标分辨率: ${targetRes}`);
 
-  for (let i = 0; i < targets.length; i++) {
-    const { img } = targets[i];
+  let downloadedCount = 0;
+  for (let i = 0; i < buttonPairs.length; i++) {
+    const { btn, img } = buttonPairs[i];
+    // outputIndex starts from 1. 1 is usually the first generated output variant.
     const hint = naming(i + 1);
-    const src = img.src;
 
-    if (!src || src.startsWith('data:')) {
-      console.warn(`[FlowAuto] 第 ${i + 1} 张图片 src 无效 (${src?.substring(0, 30)}...)，跳过`);
+    console.log(`[FlowAuto Debug] 下载第 ${i + 1}/${buttonPairs.length} 项 (任务ID: ${hint.taskId}) - 触发 btn.click()`);
+
+    // 1. Tell the background script to expect a download and rename it.
+    await chrome.runtime.sendMessage({
+      type: MSG.EXPECT_DOWNLOAD,
+      dir: hint.dir,
+      baseName: hint.baseName,
+    });
+
+    // 2. Click the card's "More" button to open the popup menu.
+    //    btn.click() alone doesn't open Radix UI popups — they need pointerdown/mousedown.
+    //    But forceClick() bubbles those events to the card container, which navigates
+    //    to the Detail/Editor view (breaking subsequent tasks).
+    //    Fix: temporarily block propagation on the card container during our click.
+    {
+      const cardContainer = btn.closest('[class*="eUdvpI"], [class*="sc-"]') || btn.parentElement?.parentElement;
+      const blocker = (e: Event) => { e.stopPropagation(); };
+      if (cardContainer && cardContainer !== btn) {
+        // Add capturing listeners that prevent the card from seeing our events
+        cardContainer.addEventListener('pointerdown', blocker, true);
+        cardContainer.addEventListener('mousedown', blocker, true);
+        cardContainer.addEventListener('click', blocker, true);
+      }
+      
+      // Dispatch the minimum events needed for Radix UI to open the popup
+      const rect = btn.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const common = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy };
+      
+      btn.dispatchEvent(new PointerEvent('pointerdown', { ...common, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: 1 }));
+      btn.dispatchEvent(new PointerEvent('pointerup', { ...common, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: 0 }));
+      btn.dispatchEvent(new MouseEvent('mousedown', { ...common, button: 0, buttons: 1 }));
+      btn.dispatchEvent(new MouseEvent('mouseup', { ...common, button: 0, buttons: 0 }));
+      btn.dispatchEvent(new MouseEvent('click', { ...common, button: 0 }));
+      
+      // Remove blockers after a tick so they don't interfere with future interactions
+      setTimeout(() => {
+        if (cardContainer && cardContainer !== btn) {
+          cardContainer.removeEventListener('pointerdown', blocker, true);
+          cardContainer.removeEventListener('mousedown', blocker, true);
+          cardContainer.removeEventListener('click', blocker, true);
+        }
+      }, 100);
+    }
+    await sleep(600); // UI stabilization for menu
+    
+    // 3. Find the menu items
+    let menuItems = querySelectorAllDeep<HTMLElement>('[role="menuitem"]').filter(isVisible);
+    
+    // Check if we just opened the "更多" (More) root menu, which contains a "下载" entry that we must click to see resolutions
+    const isMoreMenu = menuItems.some(item => {
+      const txt = (item.textContent || '').toLowerCase();
+      return txt.includes('添加动画效果') || txt.includes('添加到提示') || (txt.includes('下载') && !txt.includes('1k'));
+    });
+
+    if (isMoreMenu) {
+       console.log(`[FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...`);
+       const dlItem = menuItems.find(el => (el.textContent || '').includes('下载') && !(el.textContent || '').toLowerCase().includes('1k'));
+       if (dlItem) {
+           // Phase 1: Hover to try expanding submenu (Radix submenus use hover)
+           const rect = dlItem.getBoundingClientRect();
+           const cx = rect.left + rect.width / 2;
+           const cy = rect.top + rect.height / 2;
+           const evtOpts = { bubbles: true, cancelable: true, composed: true, clientX: cx, clientY: cy };
+           
+           dlItem.dispatchEvent(new PointerEvent('pointerenter', { ...evtOpts, pointerType: 'mouse' }));
+           dlItem.dispatchEvent(new PointerEvent('pointermove', { ...evtOpts, pointerType: 'mouse' }));
+           dlItem.dispatchEvent(new MouseEvent('mouseenter', evtOpts));
+           dlItem.dispatchEvent(new MouseEvent('mouseover', evtOpts));
+           dlItem.dispatchEvent(new MouseEvent('mousemove', evtOpts));
+           
+           await sleep(600);
+           
+           // Check if submenu appeared (look for resolution items like 1K/2K/4K)
+           let subItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
+             .filter((el): el is HTMLElement => el instanceof HTMLElement && isVisible(el));
+           const hasResolution = subItems.some(el => {
+             const t = (el.textContent || '').toLowerCase();
+             return t.includes('1k') || t.includes('2k') || t.includes('4k') || t.includes('original');
+           });
+           
+           if (!hasResolution) {
+             // Phase 2: Hover didn't expand submenu - try click as fallback
+             console.log(`[FlowAuto Debug] 悬浮未展开子菜单，尝试 click()...`);
+             dlItem.click();
+             await sleep(800);
+             subItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
+               .filter((el): el is HTMLElement => el instanceof HTMLElement && isVisible(el));
+           }
+           
+           menuItems = subItems;
+           console.log(`[FlowAuto Debug] 展开后找到 ${menuItems.length} 个菜单项`);
+       }
+    }
+
+    console.log(`[FlowAuto Debug] 找到了 ${menuItems.length} 个可见的 menuitem`);
+    if (menuItems.length === 0) {
+      console.warn(`[FlowAuto Debug] ⚠️ 未找到下载菜单项，可能是单分辨率模型(如Nano Banana Pro)。尝试直接通过URL下载...`);
+      
+      let imgSrc: string | null = getTrackableUrl(img);
+
+      if (!imgSrc) {
+          // fallback if img is somehow invalid, search around button
+          let el: HTMLElement | null = btn;
+          while (el && el !== document.body && !imgSrc) {
+            // Find the generated image, skipping avatars (googleusercontent.com)
+            const foundImg = Array.from(el.querySelectorAll('img')).find((elImg) => {
+              const src = elImg.currentSrc || elImg.src;
+              return src && !src.startsWith('data:') && !src.includes('googleusercontent.com');
+            });
+            
+            if (foundImg) {
+              imgSrc = foundImg.currentSrc || foundImg.src;
+            }
+            el = el.parentElement;
+          }
+      }
+
+      if (imgSrc) {
+        console.log(`[FlowAuto Debug] 提取到图片URL: ${imgSrc}，通过 BACKGROUND 发起 DOWNLOAD_BY_URL`);
+        await chrome.runtime.sendMessage({
+          type: MSG.DOWNLOAD_BY_URL,
+          url: imgSrc,
+          dir: hint.dir,
+          baseName: hint.baseName,
+        });
+        downloadedCount++;
+        await sleep(1500);
+      } else {
+        console.warn(`[FlowAuto Debug] 未能提取到图片的URL`);
+      }
+      
       continue;
     }
 
-    console.log(`[FlowAuto] 下载图片 ${i + 1}/${targets.length}: ${src.substring(0, 80)}...`);
+    // 4. Try to find the exact resolution requested
+    let targetMenuItem = menuItems.find((item: HTMLElement) => {
+      const text = (item.textContent || '').toLowerCase() + (item.getAttribute('name') || '').toLowerCase();
+      console.log(`[FlowAuto Debug] 检查菜单项: "${text}"`);
+      if (targetRes === '4K') return text.includes('4k');
+      if (targetRes === '2K') return text.includes('2k');
+      if (targetRes === '1K') return text.includes('1k');
+      if (targetRes === '1080p') return text.includes('1080') || text.includes('高分辨率') || text.includes('high');
+      if (targetRes === '720p') return text.includes('720') || text.includes('原始') || text.includes('original');
+      return false;
+    });
 
-    try {
-      await chrome.runtime.sendMessage({
-        type: MSG.DOWNLOAD_BY_URL,
-        url: src,
-        dir: hint.dir,
-        baseName: hint.baseName,
-      });
-      downloaded++;
-    } catch (e) {
-      console.error(`[FlowAuto] 下载消息发送失败:`, e);
+    // 5. Fallback logic: Auto-downgrade if exact resolution (like 4K) is unavailable.
+    if (!targetMenuItem) {
+      console.warn(`[FlowAuto] ⚠️ 下载菜单中没有找到请求的分辨率 (${targetRes})，正在自动降级选择...`);
+      targetMenuItem = menuItems.find((item: HTMLElement) => {
+        const text = (item.textContent || '').toLowerCase();
+        return text.includes('2k') || text.includes('1080') || text.includes('高分辨率') || text.includes('high');
+      }) || menuItems.find((item: HTMLElement) => {
+        const text = (item.textContent || '').toLowerCase();
+        return text.includes('1k') || text.includes('720') || text.includes('原始') || text.includes('original');
+      }) || menuItems[0]; 
     }
 
-    await sleep(300);
+    if (targetMenuItem) {
+      console.log(`[FlowAuto] 点击下载项: "${targetMenuItem.textContent?.trim()}"`);
+      
+      // Use native click — the reference ac15 project proves this is all React needs
+      targetMenuItem.click();
+      
+      downloadedCount++;
+      await sleep(2000); // Give browser time to dispatch native download before moving to next item
+    } else {
+        console.warn(`[FlowAuto] ⚠️ 最终未能找到任何可用的下载菜单项。`);
+    }
   }
 
-  console.log(`[FlowAuto] 图片下载完成！成功发起 ${downloaded}/${targets.length} 张`);
-}
+  console.log(`[FlowAuto] ✅ 成功发起 ${downloadedCount}/${buttonPairs.length} 个下载请求`);
 
-/**
- * Video download fallback: still uses the overlay button approach since
- * videos can't be downloaded from a simple img.src.
- * (Will be improved in later milestones.)
- */
-async function downloadVideosFallback(
-  n: number,
-  naming: (outputIndex: number) => DownloadNamingHint
-): Promise<void> {
-  console.log(`[FlowAuto] 视频下载暂未实现直接下载，跳过 (共 ${n} 个)`);
-  // TODO: Implement video download via overlay buttons or API in M5+.
-  void naming;
 }

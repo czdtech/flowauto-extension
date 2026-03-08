@@ -2,8 +2,7 @@ import { resolveCapabilities } from '../shared/capability-guard';
 import {
   DEFAULT_QUEUE_STATE,
   DEFAULT_SETTINGS,
-  type AnyModel,
-  type GenerationMode,
+  modeForModel,
   type ParsedPromptItem,
   type QueueState,
   type TaskItem,
@@ -30,9 +29,6 @@ function makeId(): string {
   return `t_${now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-function defaultModelForMode(mode: GenerationMode, s: UserSettings): AnyModel {
-  return mode === 'create-image' ? s.defaultImageModel : s.defaultVeoModel;
-}
 
 async function persist(): Promise<void> {
   await storageSet(STORAGE_KEYS.queue, queue);
@@ -76,13 +72,12 @@ export async function clearHistory(): Promise<{ queue: QueueState; settings: Use
 
 export async function addPrompts(
   prompts: ParsedPromptItem[],
-  options?: { modeOverride?: GenerationMode }
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
 
   const newTasks: TaskItem[] = prompts.map((p) => {
-    const mode = options?.modeOverride ?? settings.defaultMode;
-    const model = defaultModelForMode(mode, settings);
+    const model = settings.defaultModel;
+    const mode = modeForModel(model);
 
     const task: TaskItem = {
       id: makeId(),
@@ -96,6 +91,8 @@ export async function addPrompts(
       retries: 0,
       maxRetries: 0,  // No auto-retry; user can manually retry via "重试失败项"
       createdAt: now(),
+      downloadResolution: settings.defaultDownloadResolution,
+      logs: [{ ts: now(), msg: '任务已创建入队' }],
     };
 
     const cap = resolveCapabilities(task);

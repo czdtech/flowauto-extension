@@ -1,72 +1,64 @@
 import { getElementName, normalizeForMatch } from '../utils/aria';
 import { findAllByRole, forceClick, isVisible, sleep, waitFor } from '../utils/dom';
+import { openSettingsPanel } from './settings';
 
 export type TopTab = 'video' | 'image';
 
-function isChecked(el: HTMLElement): boolean {
-  const ariaChecked = el.getAttribute('aria-checked');
-  if (ariaChecked) return ariaChecked === 'true';
-  const ariaSelected = el.getAttribute('aria-selected');
-  if (ariaSelected) return ariaSelected === 'true';
-  // Fallback: some radios reflect state via classnames; ignore.
-  return false;
-}
-
 export function getActiveTopTab(): TopTab | null {
-  const radios = findAllByRole('radio').filter(isVisible);
-  if (!radios.length) return null;
+  const tabs = findAllByRole('tab').filter(isVisible);
 
-  const videoWanted = ['视频', 'videocam', 'video'];
-  const imageWanted = ['图片', 'image'];
-  const videoMatchers = videoWanted.map((k) => normalizeForMatch(k));
-  const imageMatchers = imageWanted.map((k) => normalizeForMatch(k));
+  const videoMatchers = ['videocam', 'video'].map(normalizeForMatch);
+  const imageMatchers = ['image'].map(normalizeForMatch);
 
-  const matchesKind = (el: HTMLElement, kind: TopTab): boolean => {
-    const name = normalizeForMatch(getElementName(el));
-    const matchers = kind === 'video' ? videoMatchers : imageMatchers;
-    return matchers.some((k) => name.includes(k));
-  };
-
-  // Prefer checked state first (most reliable).
-  for (const r of radios) {
-    if (!isChecked(r)) continue;
-    if (matchesKind(r, 'video')) return 'video';
-    if (matchesKind(r, 'image')) return 'image';
+  for (const tab of tabs) {
+    if (tab.getAttribute('aria-selected') !== 'true') continue;
+    const name = normalizeForMatch(getElementName(tab));
+    if (videoMatchers.some((k) => name.includes(k))) return 'video';
+    if (imageMatchers.some((k) => name.includes(k))) return 'image';
   }
 
-  // If checked state isn't exposed, fall back to "first matching" only when
-  // there's exactly one kind present (prevents mis-detection).
-  const hasVideo = radios.some((r) => matchesKind(r, 'video'));
-  const hasImage = radios.some((r) => matchesKind(r, 'image'));
-  if (hasVideo && !hasImage) return 'video';
-  if (hasImage && !hasVideo) return 'image';
+  // Fallback: infer from settings toggle button text when panel is collapsed.
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
+  for (const b of buttons) {
+    if (!b.hasAttribute('aria-expanded')) continue;
+    if (!isVisible(b)) continue;
+    const name = normalizeForMatch(getElementName(b));
+    if (name.includes('arrow_drop_down')) continue;
+    if (name.includes('视频') || name.includes('veo')) return 'video';
+    if (name.includes('nano') || name.includes('imagen') || name.includes('banana')) return 'image';
+  }
 
   return null;
 }
 
 export async function selectTab(tab: TopTab): Promise<void> {
-  const radios = findAllByRole('radio').filter(isVisible);
-  const wanted = tab === 'video' ? ['视频', 'videocam', 'video'] : ['图片', 'image'];
-  const matchers = wanted.map((k) => normalizeForMatch(k));
+  await openSettingsPanel();
 
-  const target = radios.find((r) => matchers.some((k) => normalizeForMatch(getElementName(r)).includes(k)));
-  if (!target) {
-    console.warn(`[FlowAuto] selectTab: 未找到 ${tab} 标签页按钮，可能是选择器失效`);
+  const wanted = tab === 'video' ? ['videocam', 'video'] : ['image'];
+  const matchers = wanted.map(normalizeForMatch);
+
+  let target: HTMLElement | null = null;
+  try {
+    target = await waitFor(() => {
+      const tabs = findAllByRole('tab').filter(isVisible);
+      return tabs.find((t) => {
+        const name = normalizeForMatch(getElementName(t));
+        return matchers.some((k) => name.includes(k));
+      }) || null;
+    }, { timeoutMs: 10000, intervalMs: 500, debugName: `selectTab-${tab}` });
+  } catch (e) {
+    console.warn(`[FlowAuto] selectTab: 未找到 ${tab} 标签页按钮`);
     return;
   }
 
-  if (isChecked(target)) {
+  if (!target) return;
+
+  if (target.getAttribute('aria-selected') === 'true') {
     console.log(`[FlowAuto] selectTab: 已经在 ${tab} 标签页`);
     return;
   }
-  forceClick(target);
 
-  // Wait a moment for results grid to switch.
-  await sleep(200);
-  await waitFor(
-    () => (isChecked(target) ? true : null),
-    { timeoutMs: 2000, intervalMs: 100, debugName: 'selectTab' }
-  );
+  forceClick(target);
+  await sleep(500);
   console.log(`[FlowAuto] selectTab: 成功切换到 ${tab}`);
 }
-
