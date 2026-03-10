@@ -42,7 +42,8 @@ export type AssetType = 'start' | 'end' | 'ingredient';
 
 export interface TaskAsset {
   type: AssetType;
-  dataUrl: string; // base64 data URL
+  refId: string;      // IndexedDB key for the image blob
+  filename: string;   // original filename for display/debugging
 }
 
 export interface TaskLogEntry {
@@ -101,4 +102,5 @@ export const DEFAULT_QUEUE_STATE: QueueState = {
 export interface ParsedPromptItem {
   filename?: string;
   prompt: string;
+  assets?: TaskAsset[];
 }

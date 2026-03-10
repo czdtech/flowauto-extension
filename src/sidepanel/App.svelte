@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { MSG } from '../shared/constants';
   import { parsePromptText } from '../shared/prompt-parser';
+  import { saveImageBlob } from '../shared/image-store';
   import type {
     GetPageStateRequest,
     PageStateResponse,
@@ -20,7 +21,7 @@
     SettingsUpdateRequest,
   } from '../shared/protocol';
   import { isImageModel, modeForModel } from '../shared/types';
-  import type { GenerationMode, QueueState, TaskItem, TaskStatus, UserSettings } from '../shared/types';
+  import type { GenerationMode, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
 
@@ -34,6 +35,9 @@
 
   let promptText = '';
   let fileInput: HTMLInputElement | undefined;
+  let multiFileInput: HTMLInputElement | undefined;
+  let folderImportStatus = '';
+  let importSummary: { txtCount: number; imgCount: number; matchedCount: number; promptCount: number; matchedFiles: string[] } | null = null;
   let queue: QueueState | null = null;
   let settings: UserSettings | null = null;
   let queueError = '';
@@ -95,6 +99,252 @@
       promptText = promptText ? promptText + '\n' + lines.join('\n') : lines.join('\n');
     };
     reader.readAsText(file, 'utf-8');
+    input.value = '';
+  }
+
+  const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']);
+
+  /** Strip the file extension from a filename. */
+  function stripExt(name: string): string {
+    const dot = name.lastIndexOf('.');
+    return dot > 0 ? name.slice(0, dot) : name;
+  }
+
+  /** Get the file extension (lowercase, no dot). */
+  function getExt(name: string): string {
+    const dot = name.lastIndexOf('.');
+    return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  }
+
+  /**
+   * Store an image file in IndexedDB and return a TaskAsset.
+   * Deduplicates by filename: the same file is stored only once.
+   */
+  const assetCache = new Map<string, TaskAsset>();
+  async function storeAsAsset(imageFile: File): Promise<TaskAsset> {
+    const cached = assetCache.get(imageFile.name);
+    if (cached) {
+      // Always re-save: IndexedDB entries may have been GC'd by clearQueue/clearHistory
+      await saveImageBlob(cached.refId, imageFile);
+      return { ...cached };
+    }
+    const refId = `img_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await saveImageBlob(refId, imageFile);
+    const asset: TaskAsset = { type: 'start', refId, filename: imageFile.name };
+    assetCache.set(imageFile.name, asset);
+    return { ...asset };
+  }
+
+  /**
+   * Common logic: process a list of files (from folder or multi-file).
+   * Finds .txt for prompts, matches images by basename.
+   *
+   * Matching strategies (in order):
+   * 1. Exact basename match: prompt line "myimg, prompt text" → myimg.png
+   * 2. If no prompts have filenames:
+   *    - 1 image + N prompts → same image for all prompts
+   *    - N images + N prompts → positional match (1st image → 1st prompt)
+   *    - Otherwise → warn about format
+   */
+  async function processImportedFiles(files: FileList | File[]): Promise<void> {
+    const fileArr = Array.from(files);
+    if (fileArr.length === 0) return;
+
+    folderImportStatus = `正在解析 ${fileArr.length} 个文件...`;
+    queueError = '';
+    importSummary = null;
+
+    try {
+      const txtFiles: File[] = [];
+      const imageFiles = new Map<string, File>();
+      const imageList: File[] = [];
+
+      for (const file of fileArr) {
+        if (file.name.startsWith('.')) continue;
+        const ext = getExt(file.name);
+        if (ext === 'txt') {
+          txtFiles.push(file);
+        } else if (IMAGE_EXTS.has(ext)) {
+          imageFiles.set(stripExt(file.name), file);
+          imageList.push(file);
+        }
+      }
+
+      if (txtFiles.length === 0) {
+        importSummary = { txtCount: 0, imgCount: imageFiles.size, matchedCount: 0, promptCount: 0, matchedFiles: [] };
+        queueError = `未找到 .txt 文件（找到 ${imageFiles.size} 张图片，但需要 .txt 提示词文件来匹配）`;
+        folderImportStatus = '';
+        return;
+      }
+
+      let allPromptText = '';
+      for (const txt of txtFiles) {
+        allPromptText += (await txt.text()) + '\n';
+      }
+
+      const prompts = parsePromptText(allPromptText);
+      if (prompts.length === 0) {
+        importSummary = { txtCount: txtFiles.length, imgCount: imageFiles.size, matchedCount: 0, promptCount: 0, matchedFiles: [] };
+        queueError = '.txt 文件中未找到有效的提示词';
+        folderImportStatus = '';
+        return;
+      }
+
+      folderImportStatus = `解析到 ${prompts.length} 条提示词，正在匹配 ${imageList.length} 张图片...`;
+
+      let matchedCount = 0;
+      const matchedFiles: string[] = [];
+      let matchMode = '';
+
+      const hasAnyFilename = prompts.some((p) => !!p.filename);
+
+      // Build a lowercase lookup for inline reference scanning
+      const imgByFullName = new Map<string, File>();
+      const imgByBaseName = new Map<string, File>();
+      for (const img of imageList) {
+        imgByFullName.set(img.name.toLowerCase(), img);
+        const base = stripExt(img.name).toLowerCase();
+        if (base.length >= 2) imgByBaseName.set(base, img);
+      }
+
+      if (hasAnyFilename) {
+        // Strategy 1: Explicit "filename, prompt text" in txt → basename match
+        matchMode = '按文件名匹配';
+        for (const p of prompts) {
+          if (!p.filename) continue;
+          const imageFile = imageFiles.get(p.filename);
+          if (!imageFile) continue;
+
+          p.assets = [await storeAsAsset(imageFile)];
+          matchedCount++;
+          matchedFiles.push(imageFile.name);
+        }
+      } else if (imageList.length > 0) {
+        // Strategy 2: Inline reference scan — find image filenames mentioned
+        // in the prompt text. Supports multi-image per prompt.
+        // e.g. "角色图1.png中的角色和角色图2.png中的角色搏斗" → [角色图1.png, 角色图2.png]
+        let inlineTotal = 0;
+        const inlineResults: { promptIdx: number; refs: File[] }[] = [];
+
+        for (let i = 0; i < prompts.length; i++) {
+          const textLower = prompts[i].prompt.toLowerCase();
+          const refs: File[] = [];
+          const seen = new Set<string>();
+
+          // Pass 1: Match full filename (with extension) — high confidence
+          for (const [fullName, img] of imgByFullName) {
+            if (textLower.includes(fullName) && !seen.has(img.name)) {
+              refs.push(img);
+              seen.add(img.name);
+            }
+          }
+
+          // Pass 2: Match basename (without extension) for remaining images
+          for (const [baseName, img] of imgByBaseName) {
+            if (!seen.has(img.name) && textLower.includes(baseName)) {
+              refs.push(img);
+              seen.add(img.name);
+            }
+          }
+
+          if (refs.length > 0) {
+            inlineResults.push({ promptIdx: i, refs });
+            inlineTotal += refs.length;
+          }
+        }
+
+        if (inlineTotal > 0) {
+          // Inline references found — use them
+          matchMode = `按提示词内引用匹配（${inlineResults.length}条命中）`;
+          for (const { promptIdx, refs } of inlineResults) {
+            const assets: TaskAsset[] = [];
+            for (const img of refs) {
+              assets.push(await storeAsAsset(img));
+              if (!matchedFiles.includes(img.name)) matchedFiles.push(img.name);
+            }
+            prompts[promptIdx].assets = assets;
+            matchedCount++;
+          }
+        } else {
+          // Strategy 3: No inline refs found — fall back to smart M×N assign
+          if (imageList.length === 1) {
+            // 1图 × N词 → same image for all prompts
+            matchMode = `1图×${prompts.length}词`;
+            const asset = await storeAsAsset(imageList[0]);
+            for (const p of prompts) {
+              p.assets = [{ ...asset }];
+              matchedCount++;
+            }
+            matchedFiles.push(imageList[0].name);
+          } else if (prompts.length === 1) {
+            // N图 × 1词 → duplicate the prompt for each image → N tasks
+            matchMode = `${imageList.length}图×1词`;
+            const original = prompts[0];
+            prompts.length = 0;
+            for (const img of imageList) {
+              const asset = await storeAsAsset(img);
+              prompts.push({ prompt: original.prompt, assets: [asset] });
+              matchedCount++;
+              matchedFiles.push(img.name);
+            }
+          } else if (imageList.length === prompts.length) {
+            // N图 × N词 → positional match
+            matchMode = `${imageList.length}图×${prompts.length}词 顺序匹配`;
+            for (let i = 0; i < prompts.length; i++) {
+              prompts[i].assets = [await storeAsAsset(imageList[i])];
+              matchedCount++;
+              matchedFiles.push(imageList[i].name);
+            }
+          } else {
+            // M图 × N词 (M≠N, both > 1) → Cartesian product: M×N tasks
+            const totalTasks = imageList.length * prompts.length;
+            matchMode = `${imageList.length}图×${prompts.length}词 = ${totalTasks}任务`;
+            const originalPrompts = prompts.map((p) => ({ ...p }));
+            prompts.length = 0;
+            const usedFiles = new Set<string>();
+            for (const p of originalPrompts) {
+              for (const img of imageList) {
+                const asset = await storeAsAsset(img);
+                prompts.push({ prompt: p.prompt, filename: p.filename, assets: [asset] });
+                matchedCount++;
+                usedFiles.add(img.name);
+              }
+            }
+            matchedFiles.push(...usedFiles);
+          }
+        }
+      }
+
+      importSummary = {
+        txtCount: txtFiles.length,
+        imgCount: imageList.length,
+        matchedCount,
+        promptCount: prompts.length,
+        matchedFiles,
+      };
+
+      folderImportStatus = `${matchMode} · ${matchedCount}/${prompts.length}，入队中...`;
+
+      const res = await sendMessage<QueueAddTasksRequest, QueueStateResponse>({
+        type: MSG.QUEUE_ADD_TASKS,
+        prompts,
+        modeOverride: effectiveModeForAdd,
+      });
+      queue = res.queue;
+      settings = res.settings;
+
+      folderImportStatus = `✅ ${matchMode} · 导入 ${prompts.length} 条任务（${matchedCount} 条含参考图）`;
+      setTimeout(() => { folderImportStatus = ''; }, 8000);
+    } catch (err: any) {
+      queueError = `导入失败: ${err?.message ?? err}`;
+      folderImportStatus = '';
+    }
+  }
+
+  async function handleMultiFileImport(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    await processImportedFiles(input.files);
     input.value = '';
   }
 
@@ -503,10 +753,43 @@
       ></textarea>
       <input type="file" accept=".txt" class="hidden-file" bind:this={fileInput}
         onchange={handleFileImport} />
+      <input type="file" class="hidden-file" bind:this={multiFileInput}
+        accept=".txt,.png,.jpg,.jpeg,.webp,.gif,.bmp" onchange={handleMultiFileImport} multiple />
       <button class="btn-import" onclick={() => fileInput?.click()} title="从 .txt 文件导入提示词">
         导入
       </button>
     </div>
+
+    <div class="import-row">
+      <button class="btn btn-folder" onclick={() => multiFileInput?.click()} title="Ctrl多选 .txt + 图片文件 → 自动匹配">
+        📎 导入 txt + 图片
+      </button>
+    </div>
+    <div class="import-hint">
+      Ctrl+点击 同时选中 .txt 和图片文件。提示词中直接写图片文件名可引用多张参考图；也支持 1图N词、N图1词、M×N 等自动匹配。
+    </div>
+
+    {#if folderImportStatus}
+      <div class="import-status">{folderImportStatus}</div>
+    {/if}
+
+    {#if importSummary}
+      <div class="import-summary">
+        <div class="summary-row">
+          <span>📄 txt 文件: {importSummary.txtCount}</span>
+          <span>🖼️ 图片: {importSummary.imgCount}</span>
+          <span>✅ 匹配: {importSummary.matchedCount}/{importSummary.promptCount}</span>
+        </div>
+        {#if importSummary.matchedFiles.length > 0}
+          <div class="matched-list">
+            {#each importSummary.matchedFiles as f}
+              <span class="matched-tag">{f}</span>
+            {/each}
+          </div>
+        {/if}
+        <button class="btn-dismiss" onclick={() => { importSummary = null; }}>关闭</button>
+      </div>
+    {/if}
 
     <div class="row row-nowrap">
       <button class="btn primary btn-flex" onclick={startQueue} disabled={!!queue?.isRunning && parsePromptText(promptText).length === 0}>
@@ -550,6 +833,9 @@
           <div class="task" class:task-clickable={hasLogs(t)} onclick={() => hasLogs(t) && toggleExpand(t.id)}>
             <div class="task-top">
               <div class="task-status">{t.status}</div>
+              {#if t.assets && t.assets.length > 0}
+                <span class="task-img-badge" title="{t.assets.length} 张参考图">🖼️</span>
+              {/if}
               <div class="task-model">{t.model}</div>
               <div class="spacer"></div>
               {#if hasLogs(t)}
@@ -754,6 +1040,85 @@
   .btn-import:hover {
     opacity: 1;
     background: rgba(255, 255, 255, 0.14);
+  }
+  .import-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-folder {
+    font-size: 12px;
+    padding: 5px 10px;
+    background: rgba(126, 200, 255, 0.10);
+    border-color: rgba(126, 200, 255, 0.30);
+    flex: 1;
+    text-align: center;
+  }
+  .btn-folder:hover {
+    background: rgba(126, 200, 255, 0.18);
+  }
+  .import-status {
+    margin-top: 6px;
+    font-size: 11px;
+    opacity: 0.8;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(126, 200, 255, 0.06);
+    border: 1px solid rgba(126, 200, 255, 0.15);
+  }
+  .import-summary {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(126, 231, 135, 0.06);
+    border: 1px solid rgba(126, 231, 135, 0.20);
+    font-size: 12px;
+  }
+  .summary-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .matched-list {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .matched-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(126, 231, 135, 0.12);
+    border: 1px solid rgba(126, 231, 135, 0.25);
+    white-space: nowrap;
+  }
+  .import-hint {
+    font-size: 10px;
+    opacity: 0.5;
+    line-height: 1.4;
+    margin-top: 4px;
+    padding: 0 2px;
+  }
+  .btn-dismiss {
+    border: none;
+    background: none;
+    color: inherit;
+    opacity: 0.5;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .btn-dismiss:hover {
+    opacity: 0.9;
+  }
+  .task-img-badge {
+    font-size: 12px;
+    opacity: 0.85;
+    cursor: default;
   }
   .textarea {
     width: 100%;

@@ -5,6 +5,8 @@ import type {
   DownloadByUrlRequest,
   ExpectDownloadRequest,
   ExpectDownloadResponse,
+  GetImageBlobRequest,
+  GetImageBlobResponse,
   GetPageStateRequest,
   PageStateResponse,
   PingRequest,
@@ -22,6 +24,7 @@ import type {
   QueueStopRequest,
   SettingsUpdateRequest,
 } from '../shared/protocol';
+import { getImageAsBase64 } from '../shared/image-store';
 import {
   addPrompts,
   appendTaskLog,
@@ -234,7 +237,7 @@ async function handleQueueGetState(_req: QueueGetStateRequest): Promise<QueueSta
 }
 
 async function handleQueueAddTasks(req: QueueAddTasksRequest): Promise<QueueStateResponse> {
-  const state = await addPrompts(req.prompts ?? []);
+  const state = await addPrompts(req.prompts ?? [], req.modeOverride);
   return { type: MSG.QUEUE_STATE, ...state };
 }
 
@@ -339,6 +342,17 @@ async function handleDownloadByUrl(req: DownloadByUrlRequest): Promise<{ ok: boo
   }
 }
 
+async function handleGetImageBlob(req: GetImageBlobRequest): Promise<GetImageBlobResponse> {
+  const result = await getImageAsBase64(req.refId);
+  if (!result) return { type: MSG.GET_IMAGE_BLOB, found: false };
+  return {
+    type: MSG.GET_IMAGE_BLOB,
+    found: true,
+    data: result.data,
+    mimeType: result.type,
+  };
+}
+
 async function makeErrorResponse(message: AnyRequest): Promise<AnyResponse | undefined> {
   if (message.type === MSG.EXPECT_DOWNLOAD) return { ok: true };
   if (message.type === MSG.DOWNLOAD_BY_URL) return { ok: false };
@@ -398,6 +412,8 @@ chrome.runtime.onMessage.addListener((message: AnyRequest, _sender, sendResponse
         return handleExpectDownload(message as ExpectDownloadRequest);
       if (message.type === MSG.DOWNLOAD_BY_URL)
         return handleDownloadByUrl(message as DownloadByUrlRequest);
+      if (message.type === MSG.GET_IMAGE_BLOB)
+        return handleGetImageBlob(message as GetImageBlobRequest);
       return undefined;
     } catch {
       return await makeErrorResponse(message);

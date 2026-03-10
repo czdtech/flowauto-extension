@@ -95,6 +95,18 @@ export type DownloadByUrlRequest = {
 
 export type DownloadByUrlResponse = { ok: boolean };
 
+export type GetImageBlobRequest = {
+  type: typeof MSG.GET_IMAGE_BLOB;
+  refId: string;
+};
+
+export type GetImageBlobResponse = {
+  type: typeof MSG.GET_IMAGE_BLOB;
+  found: boolean;
+  data?: string;      // base64-encoded image data
+  mimeType?: string;
+};
+
 export type QueueStateResponse = {
   type: typeof MSG.QUEUE_STATE;
   queue: QueueState;
@@ -118,7 +130,8 @@ export type AnyRequest =
   | ExecuteTaskRequest
   | TaskLogMessage
   | ExpectDownloadRequest
-  | DownloadByUrlRequest;
+  | DownloadByUrlRequest
+  | GetImageBlobRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -126,5 +139,6 @@ export type AnyResponse =
   | QueueStateResponse
   | TaskResultResponse
   | ExpectDownloadResponse
-  | DownloadByUrlResponse;
+  | DownloadByUrlResponse
+  | GetImageBlobResponse;
 

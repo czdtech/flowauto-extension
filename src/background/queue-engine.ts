@@ -10,6 +10,18 @@ import {
   type UserSettings,
 } from '../shared/types';
 import { storageGet, storageSet } from './storage';
+import { deleteImageBlobs, clearAllImageBlobs } from '../shared/image-store';
+
+/** Collect all asset refIds from a list of tasks. */
+function collectAssetRefIds(tasks: TaskItem[]): string[] {
+  const ids: string[] = [];
+  for (const t of tasks) {
+    if (t.assets) {
+      for (const a of t.assets) ids.push(a.refId);
+    }
+  }
+  return ids;
+}
 
 const STORAGE_KEYS = {
   queue: 'flowauto.queueState.v1',
@@ -53,6 +65,8 @@ export async function getAppState(): Promise<{ queue: QueueState; settings: User
 
 export async function clearQueue(): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
+  // GC: clean up all image blobs since we're wiping everything.
+  void clearAllImageBlobs().catch(() => {});
   queue = structuredClone(DEFAULT_QUEUE_STATE);
   await persist();
   return { queue, settings };
@@ -62,6 +76,10 @@ export async function clearQueue(): Promise<{ queue: QueueState; settings: UserS
 export async function clearHistory(): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   const DONE: Set<string> = new Set(['success', 'error', 'skipped']);
+  const removed = queue.tasks.filter((t) => DONE.has(t.status));
+  // GC: clean up image blobs from removed tasks.
+  const refIds = collectAssetRefIds(removed);
+  if (refIds.length) void deleteImageBlobs(refIds).catch(() => {});
   queue = {
     ...queue,
     tasks: queue.tasks.filter((t) => !DONE.has(t.status)),
@@ -72,12 +90,13 @@ export async function clearHistory(): Promise<{ queue: QueueState; settings: Use
 
 export async function addPrompts(
   prompts: ParsedPromptItem[],
+  modeOverride?: import('../shared/types').GenerationMode,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
 
   const newTasks: TaskItem[] = prompts.map((p) => {
     const model = settings.defaultModel;
-    const mode = modeForModel(model);
+    const mode = modeOverride ?? modeForModel(model);
 
     const task: TaskItem = {
       id: makeId(),
@@ -93,6 +112,7 @@ export async function addPrompts(
       createdAt: now(),
       downloadResolution: settings.defaultDownloadResolution,
       logs: [{ ts: now(), msg: '任务已创建入队' }],
+      assets: p.assets,
     };
 
     const cap = resolveCapabilities(task);
@@ -129,6 +149,12 @@ export async function removeTask(
   taskId: string
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
+  // GC: clean up image blobs from the removed task.
+  const removed = queue.tasks.find((t) => t.id === taskId);
+  if (removed) {
+    const refIds = collectAssetRefIds([removed]);
+    if (refIds.length) void deleteImageBlobs(refIds).catch(() => {});
+  }
   queue = {
     ...queue,
     tasks: queue.tasks.filter((t) => t.id !== taskId),
