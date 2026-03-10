@@ -25,8 +25,16 @@ import type {
   SettingsUpdateRequest,
   ResetExecutionSessionRequest,
   ResetExecutionSessionResponse,
+  RefMediaLookupRequest,
+  RefMediaLookupResponse,
+  RefMediaUpsertRequest,
+  RefMediaUpsertResponse,
 } from "../shared/protocol";
 import { getImageAsBase64 } from "../shared/image-store";
+import {
+  lookupReferenceMediaUuid,
+  upsertReferenceMediaUuid,
+} from "../shared/reference-media-store";
 import {
   addPrompts,
   appendTaskLog,
@@ -470,11 +478,37 @@ async function handleGetImageBlob(
   };
 }
 
+async function handleRefMediaLookup(
+  req: RefMediaLookupRequest,
+): Promise<RefMediaLookupResponse> {
+  const uuid = await lookupReferenceMediaUuid(req.projectId, req.assetHash);
+  if (!uuid) {
+    return { type: MSG.REF_MEDIA_LOOKUP, found: false };
+  }
+  return { type: MSG.REF_MEDIA_LOOKUP, found: true, mediaUuid: uuid };
+}
+
+async function handleRefMediaUpsert(
+  req: RefMediaUpsertRequest,
+): Promise<RefMediaUpsertResponse> {
+  await upsertReferenceMediaUuid({
+    projectId: req.projectId,
+    assetHash: req.assetHash,
+    mediaUuid: req.mediaUuid,
+    filename: req.filename,
+  });
+  return { type: MSG.REF_MEDIA_UPSERT, ok: true };
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
   if (message.type === MSG.EXPECT_DOWNLOAD) return { ok: true };
   if (message.type === MSG.DOWNLOAD_BY_URL) return { ok: false };
+  if (message.type === MSG.REF_MEDIA_LOOKUP)
+    return { type: MSG.REF_MEDIA_LOOKUP, found: false };
+  if (message.type === MSG.REF_MEDIA_UPSERT)
+    return { type: MSG.REF_MEDIA_UPSERT, ok: false };
   if (message.type === MSG.PING) {
     return {
       type: MSG.PONG,
@@ -537,6 +571,10 @@ chrome.runtime.onMessage.addListener(
           // returns true, the sender will see "message channel closed" errors.
           return { ok: true };
         }
+        if (message.type === MSG.REF_MEDIA_LOOKUP)
+          return handleRefMediaLookup(message as RefMediaLookupRequest);
+        if (message.type === MSG.REF_MEDIA_UPSERT)
+          return handleRefMediaUpsert(message as RefMediaUpsertRequest);
         if (message.type === MSG.EXPECT_DOWNLOAD)
           return handleExpectDownload(message as ExpectDownloadRequest);
         if (message.type === MSG.DOWNLOAD_BY_URL)

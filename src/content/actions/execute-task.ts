@@ -1,4 +1,10 @@
 import { MSG } from "../../shared/constants";
+import type {
+  RefMediaLookupRequest,
+  RefMediaLookupResponse,
+  RefMediaUpsertRequest,
+  RefMediaUpsertResponse,
+} from "../../shared/protocol";
 import type { TaskItem } from "../../shared/types";
 import {
   buildProjectDir,
@@ -12,16 +18,22 @@ import { setAspectRatio, setMode, setModel, setOutputCount } from "./settings";
 import { getProjectName } from "../page-state";
 import { sleep } from "../utils/dom";
 import { selectTab } from "./navigate";
+import { findPromptInput } from "../finders";
 
 // In-memory blob cache keyed by refId.  Avoids repeated IndexedDB + base64
 // round-trips when the same image (same refId) is needed across tasks.
 const blobCache = new Map<string, Blob>();
+const assetHashCache = new Map<string, string>();
 
-// Maps filename → Flow media UUID.  After a successful upload, Flow assigns
+// Maps assetHash → Flow media UUID for this content-script session.
+// Compared with filename mapping, hash mapping avoids collisions when users
+// reuse the same filename for different image contents.
+//
+// After a successful upload, Flow assigns
 // a UUID to the image (visible in media.getMediaUrlRedirect?name=UUID URLs).
 // Subsequent tasks can reuse the image by selecting it from the resource panel
 // via this UUID instead of re-uploading.
-const uploadedMediaIds = new Map<string, string>();
+const uploadedMediaByHash = new Map<string, string>();
 
 function mediaTypeForTask(task: TaskItem): "image" | "video" {
   return task.mode === "create-image" ? "image" : "video";
@@ -101,6 +113,84 @@ async function fetchAssetBlob(refId: string): Promise<Blob> {
   });
 }
 
+function getCurrentProjectId(): string | null {
+  const m = location.pathname.match(
+    /\/tools\/flow\/project\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+  );
+  return m?.[1] ?? null;
+}
+
+async function sha256Hex(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  const bytes = new Uint8Array(hash);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+async function getAssetHash(refId: string, blob: Blob): Promise<string> {
+  const cached = assetHashCache.get(refId);
+  if (cached) return cached;
+  const hash = await sha256Hex(blob);
+  assetHashCache.set(refId, hash);
+  return hash;
+}
+
+async function lookupPersistedMediaUuid(
+  projectId: string | null,
+  assetHash: string,
+): Promise<string | undefined> {
+  if (!projectId) return undefined;
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      {
+        type: MSG.REF_MEDIA_LOOKUP,
+        projectId,
+        assetHash,
+      } satisfies RefMediaLookupRequest,
+      (res: RefMediaLookupResponse | undefined) => {
+        if (chrome.runtime.lastError) {
+          resolve(undefined);
+          return;
+        }
+        if (res?.found && res.mediaUuid) {
+          resolve(res.mediaUuid);
+          return;
+        }
+        resolve(undefined);
+      },
+    );
+  });
+}
+
+async function upsertPersistedMediaUuid(input: {
+  projectId: string | null;
+  assetHash: string;
+  mediaUuid: string;
+  filename?: string;
+}): Promise<void> {
+  const projectId = input.projectId;
+  if (!projectId) return;
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      {
+        type: MSG.REF_MEDIA_UPSERT,
+        projectId,
+        assetHash: input.assetHash,
+        mediaUuid: input.mediaUuid,
+        filename: input.filename,
+      } satisfies RefMediaUpsertRequest,
+      (_res: RefMediaUpsertResponse | undefined) => {
+        // Best-effort: lookup cache miss should never break task execution.
+        resolve();
+      },
+    );
+  });
+}
+
 function assertStillOnProject(): void {
   const url = location.href;
   if (url.includes("/edit/") && url.includes("/tools/flow/project/")) {
@@ -122,8 +212,11 @@ export async function resetExecutionSession(options?: {
   clearAttachedReferences?: boolean;
 }): Promise<void> {
   blobCache.clear();
-  uploadedMediaIds.clear();
-  console.log("[FlowAuto] 会话缓存已重置（blobCache / uploadedMediaIds）");
+  assetHashCache.clear();
+  uploadedMediaByHash.clear();
+  console.log(
+    "[FlowAuto] 会话缓存已重置（blobCache / assetHashCache / uploadedMediaByHash）",
+  );
   if (options?.clearAttachedReferences !== false) {
     await clearAttachedReferences();
     console.log("[FlowAuto] 已清理提示词区域参考图");
@@ -162,26 +255,30 @@ export async function executeTask(
   // session and have a known media UUID, try the fast path: select from Flow's
   // resource panel by UUID.  For new images, upload via clipboard paste.
   if (task.assets && task.assets.length > 0) {
-    const newCount = task.assets.filter(
-      (a) => !uploadedMediaIds.has(a.filename),
-    ).length;
-    const reuseCount = task.assets.length - newCount;
-    log(
-      `参考图处理中：${task.assets.length} 张（复用 ${reuseCount}，上传 ${newCount}）`,
-    );
+    const projectId = getCurrentProjectId();
+    log(`参考图处理中：${task.assets.length} 张`);
 
     let attachedCount = 0;
+    let reusedCount = 0;
+    let uploadedCount = 0;
     for (let i = 0; i < task.assets.length; i++) {
       const asset = task.assets[i];
       try {
         assertStillOnProject();
 
-        const existingUuid = uploadedMediaIds.get(asset.filename);
+        const blob = await fetchAssetBlob(asset.refId);
+        const assetHash = await getAssetHash(asset.refId, blob);
+        const persistedUuid = await lookupPersistedMediaUuid(
+          projectId,
+          assetHash,
+        );
+        const sessionUuid = uploadedMediaByHash.get(assetHash);
+        const existingUuid = persistedUuid ?? sessionUuid;
+
         taskDebug(
-          `参考图 ${i + 1}/${task.assets.length}: ${asset.filename}${existingUuid ? `（复用UUID=${existingUuid.substring(0, 8)}…）` : "（新上传）"}`,
+          `参考图 ${i + 1}/${task.assets.length}: ${asset.filename}${existingUuid ? `（复用UUID=${existingUuid.substring(0, 8)}…）` : "（上传）"} hash=${assetHash.slice(0, 10)}…`,
         );
 
-        const blob = await fetchAssetBlob(asset.refId);
         const result = await injectImageToFlow(blob, asset.filename, {
           mediaUuid: existingUuid,
         });
@@ -192,7 +289,23 @@ export async function executeTask(
         if (result.success) {
           attachedCount++;
           if (result.mediaUuid) {
-            uploadedMediaIds.set(asset.filename, result.mediaUuid);
+            uploadedMediaByHash.set(assetHash, result.mediaUuid);
+            void upsertPersistedMediaUuid({
+              projectId,
+              assetHash,
+              mediaUuid: result.mediaUuid,
+              filename: asset.filename,
+            });
+          }
+
+          if (
+            existingUuid &&
+            result.mediaUuid &&
+            existingUuid === result.mediaUuid
+          ) {
+            reusedCount++;
+          } else {
+            uploadedCount++;
           }
         }
       } catch (e: any) {
@@ -202,7 +315,9 @@ export async function executeTask(
         throw new Error(`参考图注入失败 (${asset.filename}): ${msg}`);
       }
     }
-    log(`参考图已就绪：${attachedCount}/${task.assets.length}`);
+    log(
+      `参考图已就绪：${attachedCount}/${task.assets.length}（复用 ${reusedCount}，上传 ${uploadedCount}）`,
+    );
     await sleep(1000);
   }
 
@@ -221,6 +336,25 @@ export async function executeTask(
         ? "开始生成"
         : `开始重试生成（第 ${attempt}/${MAX_GENERATION_ATTEMPTS} 次）`,
     );
+
+    if (attempt > 1) {
+      try {
+        const input = findPromptInput();
+        input.focus();
+        if (
+          input instanceof HTMLTextAreaElement ||
+          input instanceof HTMLInputElement
+        ) {
+          input.value += " ";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        } else {
+          document.execCommand("insertText", false, " ");
+        }
+        await sleep(500);
+      } catch (e) {
+        console.warn("[FlowAuto] 重试前唤醒输入框失败:", e);
+      }
+    }
 
     let round: { newCount: number; baselineUrls: Set<string> };
     try {

@@ -98,6 +98,31 @@ export type ResetExecutionSessionResponse = {
   ok: boolean;
 };
 
+export type RefMediaLookupRequest = {
+  type: typeof MSG.REF_MEDIA_LOOKUP;
+  projectId: string;
+  assetHash: string;
+};
+
+export type RefMediaLookupResponse = {
+  type: typeof MSG.REF_MEDIA_LOOKUP;
+  found: boolean;
+  mediaUuid?: string;
+};
+
+export type RefMediaUpsertRequest = {
+  type: typeof MSG.REF_MEDIA_UPSERT;
+  projectId: string;
+  assetHash: string;
+  mediaUuid: string;
+  filename?: string;
+};
+
+export type RefMediaUpsertResponse = {
+  type: typeof MSG.REF_MEDIA_UPSERT;
+  ok: boolean;
+};
+
 export type ExpectDownloadRequest = {
   type: typeof MSG.EXPECT_DOWNLOAD;
   dir: string;
@@ -152,6 +177,8 @@ export type AnyRequest =
   | ExecuteTaskRequest
   | TaskLogMessage
   | ResetExecutionSessionRequest
+  | RefMediaLookupRequest
+  | RefMediaUpsertRequest
   | ExpectDownloadRequest
   | DownloadByUrlRequest
   | GetImageBlobRequest;
@@ -162,6 +189,8 @@ export type AnyResponse =
   | QueueStateResponse
   | TaskResultResponse
   | ResetExecutionSessionResponse
+  | RefMediaLookupResponse
+  | RefMediaUpsertResponse
   | ExpectDownloadResponse
   | DownloadByUrlResponse
   | GetImageBlobResponse;

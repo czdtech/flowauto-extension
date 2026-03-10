@@ -128,19 +128,27 @@ function getPromptForm(): HTMLElement | null {
   return (submitBtn?.closest("form") as HTMLElement | null) ?? null;
 }
 
+function getPromptReferenceRoot(): HTMLElement | null {
+  const form = getPromptForm();
+  if (form) return form;
+  const addBtn = findPromptAddButton();
+  if (!addBtn) return null;
+  return (addBtn.closest("form") as HTMLElement | null) ?? addBtn.parentElement;
+}
+
 /**
  * Best-effort attachment state around the prompt area.
  * We use both image UUIDs and "remove chip" button count so that we can
  * verify whether a resource-panel selection actually attached to the prompt.
  */
 function getPromptReferenceState(): PromptReferenceState {
-  const form = getPromptForm();
-  if (!form) return { count: 0, uuids: new Set<string>() };
+  const root = getPromptReferenceRoot();
+  if (!root) return { count: 0, uuids: new Set<string>() };
 
   const uuids = new Set<string>();
   const imageKeys = new Set<string>();
 
-  const imgs = querySelectorAllDeep<HTMLImageElement>("img", form);
+  const imgs = querySelectorAllDeep<HTMLImageElement>("img", root);
   for (const img of imgs) {
     if (!isVisible(img)) continue;
     const src = (img.src || "") + (img.getAttribute("data-src") || "");
@@ -159,7 +167,7 @@ function getPromptReferenceState(): PromptReferenceState {
   let removeBtnCount = 0;
   const allBtns = querySelectorAllDeep<HTMLElement>(
     'button, [role="button"]',
-    form,
+    root,
   );
   for (const btn of allBtns) {
     if (!isVisible(btn)) continue;
@@ -210,7 +218,7 @@ function getPromptReferenceState(): PromptReferenceState {
 async function waitForReferenceAttached(
   before: PromptReferenceState,
   expectedUuid?: string,
-  timeoutMs = 3500,
+  timeoutMs = 6500,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -223,6 +231,116 @@ async function waitForReferenceAttached(
     await sleep(200);
   }
   return false;
+}
+
+function findImageByUuid(
+  root: ParentNode,
+  mediaUuid: string,
+): HTMLImageElement | null {
+  const imgs = root.querySelectorAll<HTMLImageElement>("img");
+  for (const img of imgs) {
+    if (!isVisible(img)) continue;
+    const src = (img.src || "") + (img.getAttribute("data-src") || "");
+    if (src.includes(mediaUuid)) return img;
+  }
+  return null;
+}
+
+async function findImageByUuidWithScroll(
+  panelRoot: HTMLElement,
+  mediaUuid: string,
+): Promise<HTMLImageElement | null> {
+  let found = findImageByUuid(panelRoot, mediaUuid);
+  if (found) return found;
+
+  const scrollables = Array.from(
+    panelRoot.querySelectorAll<HTMLElement>("*"),
+  ).filter(
+    (el) =>
+      el.scrollHeight > el.clientHeight + 40 &&
+      (el.style.overflowY === "auto" ||
+        el.style.overflowY === "scroll" ||
+        getComputedStyle(el).overflowY === "auto" ||
+        getComputedStyle(el).overflowY === "scroll"),
+  );
+
+  for (const sc of scrollables) {
+    // Scan downward in chunks; stop when we can no longer scroll.
+    let lastTop = -1;
+    for (let i = 0; i < 12; i++) {
+      const step = Math.max(180, Math.floor(sc.clientHeight * 0.75));
+      sc.scrollTop = i === 0 ? 0 : sc.scrollTop + step;
+      await sleep(180);
+      found = findImageByUuid(panelRoot, mediaUuid);
+      if (found) return found;
+      if (sc.scrollTop === lastTop) break;
+      lastTop = sc.scrollTop;
+    }
+  }
+
+  return null;
+}
+
+function isSelectedState(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  const attrValues = [
+    el.getAttribute("aria-selected"),
+    el.getAttribute("aria-checked"),
+    el.getAttribute("aria-pressed"),
+    el.getAttribute("data-state"),
+  ]
+    .map((x) => (x || "").toLowerCase())
+    .filter(Boolean);
+  if (
+    attrValues.some(
+      (v) =>
+        v === "true" ||
+        v === "selected" ||
+        v === "checked" ||
+        v === "active" ||
+        v === "on",
+    )
+  ) {
+    return true;
+  }
+  const classText = String((el as any).className || "").toLowerCase();
+  if (
+    classText.includes("selected") ||
+    classText.includes("active") ||
+    classText.includes("checked")
+  ) {
+    return true;
+  }
+  if (
+    el.querySelector(
+      '[aria-selected="true"], [aria-checked="true"], [aria-pressed="true"], [data-state="selected"], [data-state="checked"]',
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function findAddToPromptButton(panelRoot: HTMLElement): HTMLElement | null {
+  const controls = querySelectorAllDeep<HTMLElement>(
+    'button, [role="button"], [role="menuitem"]',
+    panelRoot,
+  );
+  for (const el of controls) {
+    if (!isVisible(el)) continue;
+    const name = normalizeForMatch(getElementName(el));
+    if (!name) continue;
+    const isAttachAction =
+      name.includes("添加到提示") ||
+      name.includes("添加到提示词") ||
+      (name.includes("add") && name.includes("prompt")) ||
+      (name.includes("add") && name.includes("reference")) ||
+      name.includes("加入提示");
+    if (!isAttachAction) continue;
+    if (name.includes("上传") || name.includes("upload")) continue;
+    return el;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -335,17 +453,7 @@ async function trySelectFromResourcePanel(
       `[FlowAuto] 资源面板容器: tag=${searchRoot.tagName}, role=${searchRoot.getAttribute("role")}, children=${searchRoot.querySelectorAll("img").length} imgs`,
     );
 
-    const imgs = searchRoot.querySelectorAll<HTMLImageElement>("img");
-    let match: HTMLImageElement | null = null;
-
-    for (const img of imgs) {
-      if (!isVisible(img)) continue;
-      const src = (img.src || "") + (img.getAttribute("data-src") || "");
-      if (src.includes(mediaUuid)) {
-        match = img;
-        break;
-      }
-    }
+    const match = await findImageByUuidWithScroll(searchRoot, mediaUuid);
 
     if (!match) {
       console.log(
@@ -386,11 +494,32 @@ async function trySelectFromResourcePanel(
       if (tag === "A") break;
     }
 
+    const selectedBefore =
+      isSelectedState(clickTarget) || isSelectedState(match);
     console.log(
       `[FlowAuto] 资源面板: 找到 "${filename}" (UUID=${mediaUuid.substring(0, 8)}…)，点击选择 (tag=${clickTarget.tagName})`,
     );
-    forceClick(clickTarget);
-    await sleep(800);
+    if (!selectedBefore) {
+      // Prefer clicking the item container; then click image itself as backup.
+      forceClick(clickTarget);
+      await sleep(220);
+      const isPanelStillOpen = document.body.contains(searchRoot) && isVisible(searchRoot);
+      if (isPanelStillOpen && !isSelectedState(clickTarget) && clickTarget !== match) {
+        forceClick(match);
+        await sleep(260);
+      }
+    }
+
+    // Some UI variants require explicit "Add to prompt" confirmation.
+    let attachBtn: HTMLElement | null = null;
+    if (document.body.contains(searchRoot) && isVisible(searchRoot)) {
+      attachBtn = findAddToPromptButton(searchRoot);
+      if (attachBtn) {
+        console.log('[FlowAuto] 资源面板: 检测到"添加到提示"按钮，执行确认');
+        forceClick(attachBtn);
+        await sleep(320);
+      }
+    }
 
     // Navigation guard: check if clicking caused an unintended page navigation.
     if (location.href !== urlBefore) {
@@ -401,8 +530,15 @@ async function trySelectFromResourcePanel(
       return false;
     }
 
+    const selectedAfter =
+      isSelectedState(clickTarget) || isSelectedState(match);
+    const panelClosed = !document.body.contains(searchRoot) || !isVisible(searchRoot);
+
     await closeResourcePanel().catch(() => {});
-    console.log(`[FlowAuto] ✅ 从资源面板选择成功: ${filename}`);
+
+    console.log(
+      `[FlowAuto] ✅ 从资源面板选择成功: ${filename}${selectedAfter ? " (selected)" : attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
+    );
     return true;
   } catch (e: any) {
     console.warn(`[FlowAuto] 资源面板选择失败: ${e?.message ?? e}`);
@@ -829,8 +965,11 @@ export async function injectImageToFlow(
           return { success: true, mediaUuid: options.mediaUuid };
         }
         console.warn(
-          `[FlowAuto] 资源面板点击后未检测到附着: ${filename}，回退到上传`,
+          `[FlowAuto] 资源面板点击后未检测到附着: ${filename}，按已选择继续（不立即回退上传）`,
         );
+        // In practice Flow can attach asynchronously or via panel state that is
+        // hard to observe from DOM snapshots; avoid unnecessary re-upload loops.
+        return { success: true, mediaUuid: options.mediaUuid };
       }
     } catch (e: any) {
       console.warn(`[FlowAuto] 资源面板选择异常: ${e?.message ?? e}`);

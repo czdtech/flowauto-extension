@@ -1,4 +1,4 @@
-import { findCreateButton } from "../finders";
+import { findCreateButton, findPromptInput } from "../finders";
 import { forceClick, sleep, waitFor } from "../utils/dom";
 
 export interface GenerationWaitResult {
@@ -45,9 +45,28 @@ export function collectResultImageSrcs(): Set<string> {
 
 export async function clickCreate(): Promise<void> {
   const btn = findCreateButton();
-  if (btn.disabled) {
-    console.log(`[FlowAuto] 创建按钮暂时 disabled，等待 500ms...`);
-    await sleep(500);
+  const isDisabled =
+    btn.disabled || btn.getAttribute("aria-disabled") === "true";
+  if (isDisabled) {
+    console.log(
+      `[FlowAuto] 创建按钮处于禁用状态 (disabled=${btn.disabled}, aria-disabled=${btn.getAttribute("aria-disabled")})，尝试触发输入事件唤醒...`,
+    );
+    try {
+      const input = findPromptInput();
+      input.focus();
+      if (
+        input instanceof HTMLTextAreaElement ||
+        input instanceof HTMLInputElement
+      ) {
+        input.value += " ";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        document.execCommand("insertText", false, " ");
+      }
+      await sleep(500);
+    } catch (e) {
+      console.warn("[FlowAuto] 唤醒按钮失败:", e);
+    }
   }
   forceClick(btn);
   console.log(`[FlowAuto] 点击了创建按钮`);

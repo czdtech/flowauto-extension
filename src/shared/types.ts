@@ -1,32 +1,40 @@
 export type GenerationMode =
-  | 'text-to-video'
-  | 'frames-first'
-  | 'frames-first-last'
-  | 'ingredients'
-  | 'create-image'
-  | 'extend'
-  | 'jump-to'
-  | 'insert-object'
-  | 'remove-object'
-  | 'camera-position'
-  | 'camera-motion'
-  | 'camera-control';
+  | "text-to-video"
+  | "frames-first"
+  | "frames-first-last"
+  | "ingredients"
+  | "create-image"
+  | "extend"
+  | "jump-to"
+  | "insert-object"
+  | "remove-object"
+  | "camera-position"
+  | "camera-motion"
+  | "camera-control";
 
-export type VeoModel = 'veo2-fast' | 'veo2-quality' | 'veo3.1-fast' | 'veo3.1-quality';
-export type ImageModel = 'nano-banana' | 'nano-banana-2' | 'nano-banana-pro' | 'imagen4';
+export type VeoModel =
+  | "veo2-fast"
+  | "veo2-quality"
+  | "veo3.1-fast"
+  | "veo3.1-quality";
+export type ImageModel = "nano-banana-2" | "nano-banana-pro" | "imagen4";
 export type AnyModel = VeoModel | ImageModel;
 
 /** Returns true if the model generates images (as opposed to videos). */
 export function isImageModel(model: AnyModel): boolean {
-  return model === 'nano-banana' || model === 'nano-banana-2' || model === 'nano-banana-pro' || model === 'imagen4';
+  return (
+    model === "nano-banana-2" ||
+    model === "nano-banana-pro" ||
+    model === "imagen4"
+  );
 }
 
 /** Map a model to its natural GenerationMode. */
 export function modeForModel(model: AnyModel): GenerationMode {
-  return isImageModel(model) ? 'create-image' : 'text-to-video';
+  return isImageModel(model) ? "create-image" : "text-to-video";
 }
 
-export type AspectRatio = '16:9' | '9:16';
+export type AspectRatio = "16:9" | "9:16";
 
 /**
  * Unified download resolution selection.
@@ -34,16 +42,22 @@ export type AspectRatio = '16:9' | '9:16';
  * '2K/1080p' → 2K for images, 1080p for videos.
  * '4K' → 4K for both (requires upgraded tier).
  */
-export type DownloadResolution = '1K/720p' | '2K/1080p' | '4K';
+export type DownloadResolution = "1K/720p" | "2K/1080p" | "4K";
 
-export type TaskStatus = 'waiting' | 'running' | 'downloading' | 'success' | 'error' | 'skipped';
+export type TaskStatus =
+  | "waiting"
+  | "running"
+  | "downloading"
+  | "success"
+  | "error"
+  | "skipped";
 
-export type AssetType = 'start' | 'end' | 'ingredient';
+export type AssetType = "start" | "end" | "ingredient";
 
 export interface TaskAsset {
   type: AssetType;
-  refId: string;      // IndexedDB key for the image blob
-  filename: string;   // original filename for display/debugging
+  refId: string; // IndexedDB key for the image blob
+  filename: string; // original filename for display/debugging
 }
 
 export interface TaskLogEntry {
@@ -87,11 +101,11 @@ export interface UserSettings {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  defaultModel: 'veo3.1-quality',
-  defaultAspectRatio: '9:16',
+  defaultModel: "veo3.1-quality",
+  defaultAspectRatio: "9:16",
   defaultOutputCount: 1,
   interTaskDelayMs: 5000,
-  defaultDownloadResolution: '2K/1080p',
+  defaultDownloadResolution: "2K/1080p",
 };
 
 export const DEFAULT_QUEUE_STATE: QueueState = {

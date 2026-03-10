@@ -10,7 +10,6 @@
     PongResponse,
     QueueAddTasksRequest,
     QueueClearHistoryRequest,
-    QueueClearRequest,
     QueueGetStateRequest,
     QueuePauseRequest,
     QueueRemoveTaskRequest,
@@ -20,7 +19,7 @@
     QueueStateResponse,
     SettingsUpdateRequest,
   } from '../shared/protocol';
-  import { isImageModel, modeForModel } from '../shared/types';
+  import { modeForModel } from '../shared/types';
   import type { GenerationMode, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
@@ -332,10 +331,6 @@
     return '未知';
   }
 
-  $: showImageControls =
-    activeTopTab === 'image' ||
-    (activeTopTab === 'unknown' && isImageModel(s_defaultModel));
-
   $: effectiveModeForAdd = ((): GenerationMode => {
     if (activeTopTab === 'image') return 'create-image';
     if (activeTopTab === 'video') return 'text-to-video';
@@ -489,22 +484,6 @@
       folderImportStatus = '';
     } catch {
       queueError = '清空历史失败';
-    }
-  }
-
-  async function clearAll(): Promise<void> {
-    queueError = '';
-    try {
-      const res = await sendMessage<QueueClearRequest, QueueStateResponse>({
-        type: MSG.QUEUE_CLEAR,
-      });
-      queue = res.queue;
-      settings = res.settings;
-      assetCache.clear();
-      importSummary = null;
-      folderImportStatus = '';
-    } catch {
-      queueError = '清空全部失败';
     }
   }
 
@@ -711,7 +690,6 @@
               <optgroup label="图像生成">
                 <option value="nano-banana-pro">Nano Banana Pro</option>
                 <option value="nano-banana-2">Nano Banana 2</option>
-                <option value="nano-banana">Nano Banana</option>
                 <option value="imagen4">Imagen 4</option>
               </optgroup>
             </select>
