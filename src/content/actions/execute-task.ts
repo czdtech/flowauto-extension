@@ -1,14 +1,17 @@
-import { MSG } from '../../shared/constants';
-import type { TaskItem } from '../../shared/types';
-import { buildProjectDir, buildTaskBaseName } from '../../shared/filename-utils';
-import { downloadTopNLatestWithNaming } from './download';
-import { createAndWaitForGeneration } from './generate';
-import { injectImageToFlow } from './inject-image';
-import { setPromptText } from './prompt';
-import { setAspectRatio, setMode, setModel, setOutputCount } from './settings';
-import { getProjectName } from '../page-state';
-import { sleep } from '../utils/dom';
-import { selectTab } from './navigate';
+import { MSG } from "../../shared/constants";
+import type { TaskItem } from "../../shared/types";
+import {
+  buildProjectDir,
+  buildTaskBaseName,
+} from "../../shared/filename-utils";
+import { downloadTopNLatestWithNaming } from "./download";
+import { createAndWaitForGeneration } from "./generate";
+import { clearAttachedReferences, injectImageToFlow } from "./inject-image";
+import { setPromptText } from "./prompt";
+import { setAspectRatio, setMode, setModel, setOutputCount } from "./settings";
+import { getProjectName } from "../page-state";
+import { sleep } from "../utils/dom";
+import { selectTab } from "./navigate";
 
 // In-memory blob cache keyed by refId.  Avoids repeated IndexedDB + base64
 // round-trips when the same image (same refId) is needed across tasks.
@@ -20,21 +23,39 @@ const blobCache = new Map<string, Blob>();
 // via this UUID instead of re-uploading.
 const uploadedMediaIds = new Map<string, string>();
 
-function mediaTypeForTask(task: TaskItem): 'image' | 'video' {
-  return task.mode === 'create-image' ? 'image' : 'video';
+function mediaTypeForTask(task: TaskItem): "image" | "video" {
+  return task.mode === "create-image" ? "image" : "video";
 }
 
 function timeoutForTask(task: TaskItem): number {
-  return task.mode === 'create-image' ? 120_000 : 900_000;
+  return task.mode === "create-image" ? 120_000 : 900_000;
 }
 
-function taskLog(taskId: string, msg: string): void {
-  console.log(`[FlowAuto] ${msg}`);
+function taskLog(
+  taskId: string,
+  msg: string,
+  options?: { toUi?: boolean; toConsole?: boolean },
+): void {
+  const toUi = options?.toUi ?? true;
+  const toConsole = options?.toConsole ?? true;
+  if (toConsole) console.log(`[FlowAuto] ${msg}`);
+  if (!toUi) return;
   try {
-    const maybe = chrome.runtime.sendMessage({ type: MSG.TASK_LOG, taskId, msg } as any);
+    const maybe = chrome.runtime.sendMessage({
+      type: MSG.TASK_LOG,
+      taskId,
+      msg,
+    } as any);
     // In MV3 this may return a Promise; avoid "Uncaught (in promise)" noise.
-    if (maybe && typeof (maybe as any).catch === 'function') (maybe as any).catch(() => {});
-  } catch { /* best effort */ }
+    if (maybe && typeof (maybe as any).catch === "function")
+      (maybe as any).catch(() => {});
+  } catch {
+    /* best effort */
+  }
+}
+
+function taskDebug(msg: string): void {
+  console.log(`[FlowAuto][debug] ${msg}`);
 }
 
 /**
@@ -45,7 +66,9 @@ function taskLog(taskId: string, msg: string): void {
 async function fetchAssetBlob(refId: string): Promise<Blob> {
   const cached = blobCache.get(refId);
   if (cached) {
-    console.log(`[FlowAuto] fetchAssetBlob: ${refId} → ${cached.size} bytes (内存缓存)`);
+    console.log(
+      `[FlowAuto] fetchAssetBlob: ${refId} → ${cached.size} bytes (内存缓存)`,
+    );
     return cached;
   }
   return new Promise((resolve, reject) => {
@@ -65,105 +88,206 @@ async function fetchAssetBlob(refId: string): Promise<Blob> {
         for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
-        const blob = new Blob([bytes], { type: response.mimeType || 'image/png' });
-        console.log(`[FlowAuto] fetchAssetBlob: ${refId} → ${blob.size} bytes, ${blob.type}`);
+        const blob = new Blob([bytes], {
+          type: response.mimeType || "image/png",
+        });
+        console.log(
+          `[FlowAuto] fetchAssetBlob: ${refId} → ${blob.size} bytes, ${blob.type}`,
+        );
         blobCache.set(refId, blob);
         resolve(blob);
-      }
+      },
     );
   });
 }
 
-export async function executeTask(task: TaskItem): Promise<{ downloadedCount: number }> {
+function assertStillOnProject(): void {
+  const url = location.href;
+  if (url.includes("/edit/") && url.includes("/tools/flow/project/")) {
+    const parts = url.split("/");
+    const editIdx = parts.indexOf("edit");
+    if (editIdx > 0 && parts[editIdx - 1] !== "project") {
+      throw new Error(
+        `页面已导航到图片编辑界面 (${url})，中止任务以避免误操作`,
+      );
+    }
+  }
+}
+
+/**
+ * Reset in-page execution session cache.
+ * Used by "clear history/queue" so a new run starts from a clean state.
+ */
+export async function resetExecutionSession(options?: {
+  clearAttachedReferences?: boolean;
+}): Promise<void> {
+  blobCache.clear();
+  uploadedMediaIds.clear();
+  console.log("[FlowAuto] 会话缓存已重置（blobCache / uploadedMediaIds）");
+  if (options?.clearAttachedReferences !== false) {
+    await clearAttachedReferences();
+    console.log("[FlowAuto] 已清理提示词区域参考图");
+  }
+}
+
+export async function executeTask(
+  task: TaskItem,
+): Promise<{ downloadedCount: number }> {
   const mediaType = mediaTypeForTask(task);
   const log = (msg: string) => taskLog(task.id, msg);
 
-  log(`开始执行任务`);
+  log("开始执行任务");
 
-  log(`切换到 ${mediaType === 'image' ? '图片' : '视频'} 标签页`);
-  await selectTab(mediaType === 'image' ? 'image' : 'video');
+  // Keep prompt area clean between tasks.
+  await clearAttachedReferences();
   await sleep(300);
 
-  log(`设置生成模式: ${task.mode}`);
+  await selectTab(mediaType === "image" ? "image" : "video");
+  await sleep(300);
+
   await setMode(task.mode);
   await sleep(200);
 
-  log(`设置画幅 ${task.aspectRatio}, 数量 ${task.outputCount}, 模型 ${task.model}`);
   await setAspectRatio(task.aspectRatio);
   await setOutputCount(task.outputCount);
   await setModel(task.model);
   await sleep(100);
 
-  log(`输入提示词`);
+  log(`参数已就绪：${task.model} · ${task.aspectRatio} · x${task.outputCount}`);
   await setPromptText(task.prompt);
   await sleep(300);
+  log("提示词已填写");
 
   // Attach reference images.  For images that were already uploaded in this
   // session and have a known media UUID, try the fast path: select from Flow's
   // resource panel by UUID.  For new images, upload via clipboard paste.
   if (task.assets && task.assets.length > 0) {
-    const newCount = task.assets.filter(a => !uploadedMediaIds.has(a.filename)).length;
+    const newCount = task.assets.filter(
+      (a) => !uploadedMediaIds.has(a.filename),
+    ).length;
     const reuseCount = task.assets.length - newCount;
-    if (reuseCount > 0 && newCount > 0) {
-      log(`注入 ${task.assets.length} 张参考图（${reuseCount} 张从面板选择，${newCount} 张新上传）...`);
-    } else if (reuseCount > 0) {
-      log(`注入 ${task.assets.length} 张参考图（全部从资源面板选择）...`);
-    } else {
-      log(`注入 ${task.assets.length} 张参考图...`);
-    }
+    log(
+      `参考图处理中：${task.assets.length} 张（复用 ${reuseCount}，上传 ${newCount}）`,
+    );
 
-    for (const asset of task.assets) {
+    let attachedCount = 0;
+    for (let i = 0; i < task.assets.length; i++) {
+      const asset = task.assets[i];
       try {
+        assertStillOnProject();
+
         const existingUuid = uploadedMediaIds.get(asset.filename);
-        log(`${existingUuid ? '选择' : '获取'}参考图: ${asset.filename}${existingUuid ? ` (UUID=${existingUuid.substring(0, 8)}…)` : ''}`);
+        taskDebug(
+          `参考图 ${i + 1}/${task.assets.length}: ${asset.filename}${existingUuid ? `（复用UUID=${existingUuid.substring(0, 8)}…）` : "（新上传）"}`,
+        );
 
         const blob = await fetchAssetBlob(asset.refId);
         const result = await injectImageToFlow(blob, asset.filename, {
           mediaUuid: existingUuid,
         });
 
+        // Check for unintended navigation after each injection attempt.
+        assertStillOnProject();
+
         if (result.success) {
-          log(`✅ 参考图注入成功: ${asset.filename}`);
+          attachedCount++;
           if (result.mediaUuid) {
             uploadedMediaIds.set(asset.filename, result.mediaUuid);
           }
         }
       } catch (e: any) {
-        const msg = typeof e?.message === 'string' ? e.message : String(e);
-        log(`❌ 参考图注入失败: ${asset.filename} — ${msg}`);
+        const msg = typeof e?.message === "string" ? e.message : String(e);
+        taskDebug(`参考图失败: ${asset.filename} — ${msg}`);
+        log(`参考图处理失败：${asset.filename}`);
         throw new Error(`参考图注入失败 (${asset.filename}): ${msg}`);
       }
     }
+    log(`参考图已就绪：${attachedCount}/${task.assets.length}`);
     await sleep(1000);
   }
 
-  log(`点击创建，等待生成...`);
-  const result = await createAndWaitForGeneration({
-    expectedCount: task.outputCount,
-    timeoutMs: timeoutForTask(task),
-  });
-
-  const newCount = result.newCount;
-  if (newCount <= 0) {
-    throw new Error(`生成失败（无新产出）`);
-  }
-
-  log(`生成完成，下载 ${newCount} 个文件...`);
-  const projectName = getProjectName() ?? 'Flow';
+  const projectName = getProjectName() ?? "Flow";
   const dir = buildProjectDir(projectName);
 
-  await downloadTopNLatestWithNaming(task, newCount, (outputIndex) => {
-    const baseCore = buildTaskBaseName(task, outputIndex);
-    const idTail = task.id.slice(-6);
-    return {
-      dir,
-      baseName: `${baseCore}__${idTail}`,
-      taskId: task.id,
-      outputIndex,
-    };
-  }, result.baselineUrls);
+  const MAX_GENERATION_ATTEMPTS = 3;
+  let downloadedTotal = 0;
+  let remaining = task.outputCount;
+  let attempt = 0;
 
-  log(`任务完成`);
-  return { downloadedCount: newCount };
+  while (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
+    attempt++;
+    log(
+      attempt === 1
+        ? "开始生成"
+        : `开始重试生成（第 ${attempt}/${MAX_GENERATION_ATTEMPTS} 次）`,
+    );
+
+    let round: { newCount: number; baselineUrls: Set<string> };
+    try {
+      round = await createAndWaitForGeneration({
+        expectedCount: remaining,
+        timeoutMs: timeoutForTask(task),
+      });
+    } catch (e: any) {
+      const msg = typeof e?.message === "string" ? e.message : String(e);
+      console.warn(`[FlowAuto] 生成异常(第${attempt}次): ${msg}`);
+      if (attempt < MAX_GENERATION_ATTEMPTS) {
+        log(`生成异常，准备重试（还差 ${remaining}）`);
+        await sleep(1200);
+        continue;
+      }
+      throw new Error(`生成失败: ${msg}`);
+    }
+
+    const produced = round.newCount;
+    if (produced <= 0) {
+      if (attempt < MAX_GENERATION_ATTEMPTS) {
+        log(`本轮未产出结果，准备重试（还差 ${remaining}）`);
+        await sleep(1200);
+        continue;
+      }
+      throw new Error("生成失败（无新产出）");
+    }
+
+    const roundCount = Math.min(produced, remaining);
+    log(
+      `生成完成：${roundCount} 个结果（累计 ${downloadedTotal + roundCount}/${task.outputCount}）`,
+    );
+
+    log("开始下载");
+    await downloadTopNLatestWithNaming(
+      task,
+      roundCount,
+      (outputIndex) => {
+        const finalIndex = downloadedTotal + outputIndex;
+        const baseCore = buildTaskBaseName(task, finalIndex);
+        const idTail = task.id.slice(-6);
+        return {
+          dir,
+          baseName: `${baseCore}__${idTail}`,
+          taskId: task.id,
+          outputIndex: finalIndex,
+        };
+      },
+      round.baselineUrls,
+    );
+
+    downloadedTotal += roundCount;
+    remaining = Math.max(0, task.outputCount - downloadedTotal);
+
+    if (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
+      log(`结果不足，自动补生成（剩余 ${remaining}）`);
+      await sleep(1200);
+    }
+  }
+
+  if (remaining > 0) {
+    throw new Error(
+      `生成结果不足：期望 ${task.outputCount}，实际 ${downloadedTotal}（已达到最大重试次数）`,
+    );
+  }
+
+  log(`下载完成：${downloadedTotal} 个文件`);
+  log("任务完成");
+  return { downloadedCount: downloadedTotal };
 }
-

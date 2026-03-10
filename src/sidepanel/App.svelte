@@ -42,28 +42,6 @@
   let settings: UserSettings | null = null;
   let queueError = '';
   let filter: 'all' | TaskStatus = 'all';
-  let collapsedTasks = new Set<string>();
-
-  function isExpanded(t: TaskItem): boolean {
-    return hasLogs(t) && !collapsedTasks.has(t.id);
-  }
-
-  function toggleExpand(taskId: string): void {
-    if (collapsedTasks.has(taskId)) {
-      collapsedTasks.delete(taskId);
-    } else {
-      collapsedTasks.add(taskId);
-    }
-    collapsedTasks = collapsedTasks;
-  }
-
-  function fmtTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
-  }
-
-  function hasLogs(t: TaskItem): boolean {
-    return !!t.logs && t.logs.length > 0;
-  }
 
   let s_defaultModel: UserSettings['defaultModel'] = 'veo3.1-quality';
   let s_defaultAspectRatio: '16:9' | '9:16' = '9:16';
@@ -495,12 +473,20 @@
 
   async function clearHistory(): Promise<void> {
     queueError = '';
+    if (queue?.isRunning) {
+      queueError = '正在执行任务时不能清空历史';
+      return;
+    }
     try {
       const res = await sendMessage<QueueClearHistoryRequest, QueueStateResponse>({
         type: MSG.QUEUE_CLEAR_HISTORY,
       });
       queue = res.queue;
       settings = res.settings;
+      // Also clear sidepanel-side caches so "历史清空" truly starts fresh.
+      assetCache.clear();
+      importSummary = null;
+      folderImportStatus = '';
     } catch {
       queueError = '清空历史失败';
     }
@@ -514,6 +500,9 @@
       });
       queue = res.queue;
       settings = res.settings;
+      assetCache.clear();
+      importSummary = null;
+      folderImportStatus = '';
     } catch {
       queueError = '清空全部失败';
     }
@@ -618,6 +607,18 @@
     };
     for (const t of visible) c[t.status] = (c[t.status] ?? 0) + 1;
     return c;
+  }
+
+  function taskAssetFilenames(t: TaskItem): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const a of t.assets ?? []) {
+      const name = (a.filename || '').trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      result.push(name);
+    }
+    return result;
   }
 </script>
 
@@ -801,7 +802,7 @@
       <button class="btn btn-flex" onclick={retryAllErrors} disabled={!queue || counts(queue).error === 0}>
         重试失败
       </button>
-      <button class="btn btn-flex" onclick={clearHistory} disabled={!queue || (counts(queue).success + counts(queue).error + counts(queue).skipped) === 0}>
+      <button class="btn btn-flex" onclick={clearHistory} disabled={!queue || queue.isRunning || (counts(queue).success + counts(queue).error + counts(queue).skipped) === 0}>
         清空历史
       </button>
     </div>
@@ -829,39 +830,33 @@
 
       <div class="task-list">
         {#each queue.tasks.slice().reverse().filter((t) => taskMatchesTab(t) && (filter === 'all' || t.status === filter)) as t (t.id)}
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <div class="task" class:task-clickable={hasLogs(t)} onclick={() => hasLogs(t) && toggleExpand(t.id)}>
+          {@const assetNames = taskAssetFilenames(t)}
+          <div class="task">
             <div class="task-top">
               <div class="task-status">{t.status}</div>
-              {#if t.assets && t.assets.length > 0}
-                <span class="task-img-badge" title="{t.assets.length} 张参考图">🖼️</span>
-              {/if}
               <div class="task-model">{t.model}</div>
               <div class="spacer"></div>
-              {#if hasLogs(t)}
-                <span class="expand-icon">{isExpanded(t) ? '▾' : '▸'}</span>
-              {/if}
-              <button class="mini" onclick={(e) => { e.stopPropagation(); skipOne(t.id); }} disabled={t.status !== 'waiting'}>
+              <button class="mini" onclick={() => skipOne(t.id)} disabled={t.status !== 'waiting'}>
                 跳过
               </button>
-              <button class="mini danger" onclick={(e) => { e.stopPropagation(); removeOne(t.id); }}>删除</button>
+              <button class="mini danger" onclick={() => removeOne(t.id)}>删除</button>
             </div>
             {#if t.filename}
               <div class="task-fn">{t.filename}</div>
             {/if}
             <div class="task-prompt">{t.prompt}</div>
+            {#if assetNames.length > 0}
+              <div class="task-refs">
+                <span class="task-refs-label">参考图</span>
+                <div class="task-refs-list">
+                  {#each assetNames as name}
+                    <span class="task-ref-tag">{name}</span>
+                  {/each}
+                </div>
+              </div>
+            {/if}
             {#if t.errorMessage}
               <div class="task-err">{t.errorMessage}</div>
-            {/if}
-            {#if isExpanded(t) && t.logs}
-              <div class="task-logs">
-                {#each t.logs as log}
-                  <div class="task-log-line">
-                    <span class="log-time">{fmtTime(log.ts)}</span>
-                    <span class="log-msg">{log.msg}</span>
-                  </div>
-                {/each}
-              </div>
             {/if}
           </div>
         {/each}
@@ -1115,11 +1110,6 @@
   .btn-dismiss:hover {
     opacity: 0.9;
   }
-  .task-img-badge {
-    font-size: 12px;
-    opacity: 0.85;
-    cursor: default;
-  }
   .textarea {
     width: 100%;
     box-sizing: border-box;
@@ -1212,44 +1202,39 @@
     word-break: break-word;
     white-space: pre-wrap;
   }
+  .task-refs {
+    margin-top: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .task-refs-label {
+    font-size: 11px;
+    opacity: 0.65;
+    white-space: nowrap;
+    margin-top: 1px;
+  }
+  .task-refs-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .task-ref-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(126, 231, 135, 0.28);
+    background: rgba(126, 231, 135, 0.10);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .task-err {
     margin-top: 6px;
     font-size: 12px;
     color: #ff7b72;
     white-space: pre-wrap;
-  }
-  .task-clickable {
-    cursor: pointer;
-  }
-  .task-clickable:hover {
-    border-color: rgba(255, 255, 255, 0.18);
-  }
-  .expand-icon {
-    opacity: 0.5;
-    font-size: 11px;
-    user-select: none;
-  }
-  .task-logs {
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .task-log-line {
-    font-size: 11px;
-    line-height: 1.4;
-    opacity: 0.8;
-  }
-  .log-time {
-    opacity: 0.5;
-    margin-right: 6px;
-    font-family: monospace;
-    font-size: 10px;
-  }
-  .log-msg {
-    word-break: break-word;
   }
   .status {
     font-weight: 650;

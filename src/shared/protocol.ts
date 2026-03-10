@@ -1,13 +1,19 @@
-import { MSG } from './constants';
-import type { GenerationMode, ParsedPromptItem, QueueState, TaskItem, UserSettings } from './types';
+import { MSG } from "./constants";
+import type {
+  GenerationMode,
+  ParsedPromptItem,
+  QueueState,
+  TaskItem,
+  UserSettings,
+} from "./types";
 
 export type ConnectionReason =
-  | 'no_active_tab'
-  | 'not_labs'
-  | 'not_flow_project'
-  | 'no_content_script'
-  | 'timeout'
-  | 'unknown';
+  | "no_active_tab"
+  | "not_labs"
+  | "not_flow_project"
+  | "no_content_script"
+  | "timeout"
+  | "unknown";
 
 export type PingRequest = { type: typeof MSG.PING };
 
@@ -31,7 +37,7 @@ export type PageStateResponse = {
   isLabs: boolean;
   isFlowProject: boolean;
   // Active top tab in Flow UI (video/image). Undefined when not detectable.
-  activeTopTab?: 'video' | 'image';
+  activeTopTab?: "video" | "image";
 };
 
 export type QueueGetStateRequest = { type: typeof MSG.QUEUE_GET_STATE };
@@ -45,8 +51,14 @@ export type QueueAddTasksRequest = {
 
 export type QueueClearRequest = { type: typeof MSG.QUEUE_CLEAR };
 export type QueueClearHistoryRequest = { type: typeof MSG.QUEUE_CLEAR_HISTORY };
-export type QueueRemoveTaskRequest = { type: typeof MSG.QUEUE_REMOVE_TASK; taskId: string };
-export type QueueSkipTaskRequest = { type: typeof MSG.QUEUE_SKIP_TASK; taskId: string };
+export type QueueRemoveTaskRequest = {
+  type: typeof MSG.QUEUE_REMOVE_TASK;
+  taskId: string;
+};
+export type QueueSkipTaskRequest = {
+  type: typeof MSG.QUEUE_SKIP_TASK;
+  taskId: string;
+};
 export type QueueRetryErrorsRequest = { type: typeof MSG.QUEUE_RETRY_ERRORS };
 export type QueueStartRequest = { type: typeof MSG.QUEUE_START };
 export type QueuePauseRequest = { type: typeof MSG.QUEUE_PAUSE };
@@ -76,6 +88,16 @@ export type TaskResultResponse = {
   downloadedCount?: number;
 };
 
+export type ResetExecutionSessionRequest = {
+  type: typeof MSG.RESET_EXECUTION_SESSION;
+  clearAttachedReferences?: boolean;
+};
+
+export type ResetExecutionSessionResponse = {
+  type: typeof MSG.RESET_EXECUTION_SESSION;
+  ok: boolean;
+};
+
 export type ExpectDownloadRequest = {
   type: typeof MSG.EXPECT_DOWNLOAD;
   dir: string;
@@ -103,7 +125,7 @@ export type GetImageBlobRequest = {
 export type GetImageBlobResponse = {
   type: typeof MSG.GET_IMAGE_BLOB;
   found: boolean;
-  data?: string;      // base64-encoded image data
+  data?: string; // base64-encoded image data
   mimeType?: string;
 };
 
@@ -129,6 +151,7 @@ export type AnyRequest =
   | SettingsUpdateRequest
   | ExecuteTaskRequest
   | TaskLogMessage
+  | ResetExecutionSessionRequest
   | ExpectDownloadRequest
   | DownloadByUrlRequest
   | GetImageBlobRequest;
@@ -138,7 +161,7 @@ export type AnyResponse =
   | PageStateResponse
   | QueueStateResponse
   | TaskResultResponse
+  | ResetExecutionSessionResponse
   | ExpectDownloadResponse
   | DownloadByUrlResponse
   | GetImageBlobResponse;
-
