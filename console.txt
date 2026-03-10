@@ -1,0 +1,342 @@
+index.ts-GSCtrrFX.js:1 [FlowAuto] 收到任务执行指令: {id: 't_1773167193903_7f9177b79d2de', prompt: '角色图1.jpg中的角色和角色图2.jpg中的角色搏斗', mode: 'create-image', model: 'nano-banana-pro', aspectRatio: '9:16', …}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始执行任务
+index.ts-GSCtrrFX.js:1 [FlowAuto] 展开设置面板
+index.ts-GSCtrrFX.js:1 [FlowAuto] selectTab: 已经在 image 标签页
+index.ts-GSCtrrFX.js:1 [FlowAuto] 更改模型为: nano-banana-pro
+[Violation] 'setTimeout' handler 用时 <N> 毫秒
+[Violation] 'setTimeout' handler 用时 <N> 毫秒
+[Violation] 'setTimeout' handler 用时 <N> 毫秒
+[Violation] 'setTimeout' handler 用时 <N> 毫秒
+[Violation] 'setTimeout' handler 用时 <N> 毫秒
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参数已就绪：nano-banana-pro · 9:16 · x2
+index.ts-GSCtrrFX.js:1 [FlowAuto] findPromptInput: 通过 ARIA 名称匹配找到 textbox: "您希望创作什么内容？"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入 Prompt (尝试 1/3)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ Prompt 注入成功
+index.ts-GSCtrrFX.js:1 [FlowAuto] 提示词已填写
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图处理中：2 张
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193823_53c1edb2c7004 → 923446 bytes, image/jpeg
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 1/2: 1.jpg（复用UUID=8ab57c6b…） hash=5ae033c5d1…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 1.jpg (923446 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "1.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "1.jpg" (UUID=8ab57c6b…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 1.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193856_74685f096b739 → 204088 bytes, image/jpeg
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 2/2: 2.jpg（复用UUID=2e31bad4…） hash=120a86d26e…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 2.jpg (204088 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "2.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "2.jpg" (UUID=2e31bad4…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 2.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图已就绪：2/2（复用 2，上传 0）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始生成
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击了创建按钮
+index.ts-GSCtrrFX.js:1 [FlowAuto] 等待生成完成: 基线图片URL数=69, 期望新增=2, 超时=120000ms
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(2), 视为完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成！新增图片URL: 2 (基线: 69)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成：2 个结果（累计 2/2）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始下载
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] downloadTopNLatestWithNaming started for task: t_1773167193903_7f9177b79d2de, n=2, mode=create-image, dl_res=1K/720p
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Target Resolution: 1K, Found Buttons at start: 2
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 准备下载 2 项，目标分辨率: 1K
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 1/2 项 (任务ID: t_1773167193903_7f9177b79d2de) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 2/2 项 (任务ID: t_1773167193903_7f9177b79d2de) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 成功发起 2/2 个下载请求
+index.ts-GSCtrrFX.js:1 [FlowAuto] 下载完成：2 个文件
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务执行成功: {downloadedCount: 2}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 收到任务执行指令: {id: 't_1773167193903_d6e6b68d671638', prompt: '角色图3.png中的角色和角色图1.jpg中的角色跳舞', mode: 'create-image', model: 'nano-banana-pro', aspectRatio: '9:16', …}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始执行任务
+index.ts-GSCtrrFX.js:1 [FlowAuto] 展开设置面板
+index.ts-GSCtrrFX.js:1 [FlowAuto] selectTab: 已经在 image 标签页
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参数已就绪：nano-banana-pro · 9:16 · x2
+index.ts-GSCtrrFX.js:1 [FlowAuto] findPromptInput: 通过 ARIA 名称匹配找到 textbox: "您希望创作什么内容？"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入 Prompt (尝试 1/3)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ Prompt 注入成功
+index.ts-GSCtrrFX.js:1 [FlowAuto] 提示词已填写
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图处理中：2 张
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193823_53c1edb2c7004 → 923446 bytes (内存缓存)
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 1/2: 1.jpg（复用UUID=8ab57c6b…） hash=5ae033c5d1…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 1.jpg (923446 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "1.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "1.jpg" (UUID=8ab57c6b…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 1.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193868_587da5b02f4ec8 → 787841 bytes, image/png
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 2/2: 3.png（复用UUID=d83dae2d…） hash=b7b0972f83…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 3.png (787841 bytes, image/png)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "3.png"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "3.png" (UUID=d83dae2d…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 3.png (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图已就绪：2/2（复用 2，上传 0）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始生成
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击了创建按钮
+index.ts-GSCtrrFX.js:1 [FlowAuto] 等待生成完成: 基线图片URL数=71, 期望新增=2, 超时=120000ms
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(2), 视为完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成！新增图片URL: 2 (基线: 71)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成：2 个结果（累计 2/2）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始下载
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] downloadTopNLatestWithNaming started for task: t_1773167193903_d6e6b68d671638, n=2, mode=create-image, dl_res=1K/720p
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Target Resolution: 1K, Found Buttons at start: 2
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 准备下载 2 项，目标分辨率: 1K
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 1/2 项 (任务ID: t_1773167193903_d6e6b68d671638) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 2/2 项 (任务ID: t_1773167193903_d6e6b68d671638) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 成功发起 2/2 个下载请求
+index.ts-GSCtrrFX.js:1 [FlowAuto] 下载完成：2 个文件
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务执行成功: {downloadedCount: 2}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 收到任务执行指令: {id: 't_1773167193903_38c020be9632d8', prompt: '角色图1.jpg中的角色和角色图3.png中的角色爬山', mode: 'create-image', model: 'nano-banana-pro', aspectRatio: '9:16', …}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始执行任务
+index.ts-GSCtrrFX.js:1 [FlowAuto] 展开设置面板
+index.ts-GSCtrrFX.js:1 [FlowAuto] selectTab: 已经在 image 标签页
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参数已就绪：nano-banana-pro · 9:16 · x2
+index.ts-GSCtrrFX.js:1 [FlowAuto] findPromptInput: 通过 ARIA 名称匹配找到 textbox: "您希望创作什么内容？"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入 Prompt (尝试 1/3)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ Prompt 注入成功
+index.ts-GSCtrrFX.js:1 [FlowAuto] 提示词已填写
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图处理中：2 张
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193823_53c1edb2c7004 → 923446 bytes (内存缓存)
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 1/2: 1.jpg（复用UUID=8ab57c6b…） hash=5ae033c5d1…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 1.jpg (923446 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "1.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "1.jpg" (UUID=8ab57c6b…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 1.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193868_587da5b02f4ec8 → 787841 bytes (内存缓存)
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 2/2: 3.png（复用UUID=d83dae2d…） hash=b7b0972f83…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 3.png (787841 bytes, image/png)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "3.png"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "3.png" (UUID=d83dae2d…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 3.png (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图已就绪：2/2（复用 2，上传 0）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始生成
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击了创建按钮
+index.ts-GSCtrrFX.js:1 [FlowAuto] 等待生成完成: 基线图片URL数=73, 期望新增=2, 超时=120000ms
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(2), 视为完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成！新增图片URL: 2 (基线: 73)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成：2 个结果（累计 2/2）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始下载
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] downloadTopNLatestWithNaming started for task: t_1773167193903_38c020be9632d8, n=2, mode=create-image, dl_res=1K/720p
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Target Resolution: 1K, Found Buttons at start: 2
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 准备下载 2 项，目标分辨率: 1K
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 1/2 项 (任务ID: t_1773167193903_38c020be9632d8) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 2/2 项 (任务ID: t_1773167193903_38c020be9632d8) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 成功发起 2/2 个下载请求
+index.ts-GSCtrrFX.js:1 [FlowAuto] 下载完成：2 个文件
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务执行成功: {downloadedCount: 2}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 收到任务执行指令: {id: 't_1773167193903_2cd2e24d13522', prompt: '角色图2.jpg中的角色和角色图1.jpg中的角色开车', mode: 'create-image', model: 'nano-banana-pro', aspectRatio: '9:16', …}
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始执行任务
+index.ts-GSCtrrFX.js:1 [FlowAuto] 展开设置面板
+index.ts-GSCtrrFX.js:1 [FlowAuto] selectTab: 已经在 image 标签页
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参数已就绪：nano-banana-pro · 9:16 · x2
+index.ts-GSCtrrFX.js:1 [FlowAuto] findPromptInput: 通过 ARIA 名称匹配找到 textbox: "您希望创作什么内容？"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入 Prompt (尝试 1/3)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ Prompt 注入成功
+index.ts-GSCtrrFX.js:1 [FlowAuto] 提示词已填写
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图处理中：2 张
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193823_53c1edb2c7004 → 923446 bytes (内存缓存)
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 1/2: 1.jpg（复用UUID=8ab57c6b…） hash=5ae033c5d1…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 1.jpg (923446 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "1.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "1.jpg" (UUID=8ab57c6b…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 1.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] fetchAssetBlob: img_1773167193856_74685f096b739 → 204088 bytes (内存缓存)
+index.ts-GSCtrrFX.js:1 [FlowAuto][debug] 参考图 2/2: 2.jpg（复用UUID=2e31bad4…） hash=120a86d26e…
+index.ts-GSCtrrFX.js:1 [FlowAuto] 注入图片: 2.jpg (204088 bytes, image/jpeg)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板容器: tag=DIV, role=dialog, children=17 imgs
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板搜索: "2.jpg"，等待过滤结果
+index.ts-GSCtrrFX.js:1 [FlowAuto] 资源面板: 找到 "2.jpg" (UUID=2e31bad4…)，点击选择 (tag=DIV)
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 从资源面板选择成功: 2.jpg (auto-closed)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 参考图已就绪：2/2（复用 2，上传 0）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始生成
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击了创建按钮
+index.ts-GSCtrrFX.js:1 [FlowAuto] 等待生成完成: 基线图片URL数=75, 期望新增=2, 超时=120000ms
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成中... 新图片: 0/2, 稳定: 0/3
+index.ts-GSCtrrFX.js:1 [FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "arrow_forward 创建", disabled=false, aria-disabled=null
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(2), 视为完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成！新增图片URL: 2 (基线: 75)
+index.ts-GSCtrrFX.js:1 [FlowAuto] 生成完成：2 个结果（累计 2/2）
+index.ts-GSCtrrFX.js:1 [FlowAuto] 开始下载
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] downloadTopNLatestWithNaming started for task: t_1773167193903_2cd2e24d13522, n=2, mode=create-image, dl_res=1K/720p
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] searchRoot tag: DIV, class: sc-11801678-0 eUdvpI
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Found 1 menu buttons in searchRoot.
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Checking button: visible=true, text=more_vert更多
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] Target Resolution: 1K, Found Buttons at start: 2
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 准备下载 2 项，目标分辨率: 1K
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 1/2 项 (任务ID: t_1773167193903_2cd2e24d13522) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 下载第 2/2 项 (任务ID: t_1773167193903_2cd2e24d13522) - 触发 btn.click()
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 展开后找到 13 个菜单项
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 找到了 13 个可见的 menuitem
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "motion_blur添加动画效果"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "add添加到提示"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "favorite收藏"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "download下载"
+index.ts-GSCtrrFX.js:1 [FlowAuto Debug] 检查菜单项: "1koriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] 点击下载项: "1KOriginal size"
+index.ts-GSCtrrFX.js:1 [FlowAuto] ✅ 成功发起 2/2 个下载请求
+index.ts-GSCtrrFX.js:1 [FlowAuto] 下载完成：2 个文件
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务完成
+index.ts-GSCtrrFX.js:1 [FlowAuto] 任务执行成功: {downloadedCount: 2}

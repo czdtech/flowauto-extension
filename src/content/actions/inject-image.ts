@@ -22,7 +22,7 @@
 
 import { querySelectorAllDeep } from "../finders";
 import { getElementName, normalizeForMatch } from "../utils/aria";
-import { forceClick, isVisible, sleep, waitFor } from "../utils/dom";
+import { forceClick, isVisible, randomSleep, sleep, waitFor } from "../utils/dom";
 
 // ---------------------------------------------------------------------------
 // DOM finders
@@ -79,19 +79,19 @@ async function openResourcePanel(): Promise<void> {
     intervalMs: 300,
     debugName: "open-resource-panel",
   });
-  await sleep(300);
+  await randomSleep(250, 500);
 }
 
 async function closeResourcePanel(): Promise<void> {
   if (!isResourcePanelOpen()) return;
   const btn = findPromptAddButton();
   if (btn) forceClick(btn);
-  await sleep(400);
+  await randomSleep(300, 600);
   if (isResourcePanelOpen()) {
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
-    await sleep(400);
+    await randomSleep(300, 600);
   }
 }
 
@@ -114,123 +114,6 @@ function collectMediaUuids(): Set<string> {
     if (match2) uuids.add(match2[1]);
   }
   return uuids;
-}
-
-interface PromptReferenceState {
-  count: number;
-  uuids: Set<string>;
-}
-
-function getPromptForm(): HTMLElement | null {
-  const submitBtn = document.querySelector<HTMLElement>(
-    'button[type="submit"]',
-  );
-  return (submitBtn?.closest("form") as HTMLElement | null) ?? null;
-}
-
-function getPromptReferenceRoot(): HTMLElement | null {
-  const form = getPromptForm();
-  if (form) return form;
-  const addBtn = findPromptAddButton();
-  if (!addBtn) return null;
-  return (addBtn.closest("form") as HTMLElement | null) ?? addBtn.parentElement;
-}
-
-/**
- * Best-effort attachment state around the prompt area.
- * We use both image UUIDs and "remove chip" button count so that we can
- * verify whether a resource-panel selection actually attached to the prompt.
- */
-function getPromptReferenceState(): PromptReferenceState {
-  const root = getPromptReferenceRoot();
-  if (!root) return { count: 0, uuids: new Set<string>() };
-
-  const uuids = new Set<string>();
-  const imageKeys = new Set<string>();
-
-  const imgs = querySelectorAllDeep<HTMLImageElement>("img", root);
-  for (const img of imgs) {
-    if (!isVisible(img)) continue;
-    const src = (img.src || "") + (img.getAttribute("data-src") || "");
-    const match = src.match(MEDIA_UUID_RE);
-    if (match) uuids.add(match[1]);
-
-    const rect = img.getBoundingClientRect();
-    if (rect.width < 20 || rect.height < 20) continue;
-    if (match?.[1]) {
-      imageKeys.add(match[1]);
-    } else if (src && !src.startsWith("data:")) {
-      imageKeys.add(src);
-    }
-  }
-
-  let removeBtnCount = 0;
-  const allBtns = querySelectorAllDeep<HTMLElement>(
-    'button, [role="button"]',
-    root,
-  );
-  for (const btn of allBtns) {
-    if (!isVisible(btn)) continue;
-
-    const name = normalizeForMatch(getElementName(btn));
-
-    // Skip known action buttons
-    if (btn.getAttribute("type") === "submit") continue;
-    if (name.includes("创建") || name.includes("create")) continue;
-    if (name.includes("add_2")) continue;
-    if (name.includes("arrow_forward")) continue;
-    if (name.includes("settings") || name.includes("设置")) continue;
-    if (name.includes("更多") || name.includes("more_vert")) continue;
-
-    const isRemoveBtn =
-      name.includes("close") ||
-      name.includes("cancel") ||
-      name.includes("移除") ||
-      name.includes("remove") ||
-      name.includes("删除") ||
-      name.includes("delete") ||
-      name.includes("clear") ||
-      name.includes("清除");
-
-    if (!isRemoveBtn) {
-      const rect = btn.getBoundingClientRect();
-      if (rect.width > 36 || rect.height > 36) continue;
-      const text = (btn.textContent || "").trim().toLowerCase();
-      if (
-        text !== "×" &&
-        text !== "x" &&
-        text !== "close" &&
-        text !== "cancel"
-      ) {
-        continue;
-      }
-    }
-
-    removeBtnCount++;
-  }
-
-  return {
-    count: Math.max(imageKeys.size, removeBtnCount, uuids.size),
-    uuids,
-  };
-}
-
-async function waitForReferenceAttached(
-  before: PromptReferenceState,
-  expectedUuid?: string,
-  timeoutMs = 6500,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const now = getPromptReferenceState();
-
-    if (expectedUuid && now.uuids.has(expectedUuid)) return true;
-    if (now.count > before.count) return true;
-    if (now.uuids.size > before.uuids.size) return true;
-
-    await sleep(200);
-  }
-  return false;
 }
 
 function findImageByUuid(
@@ -344,6 +227,74 @@ function findAddToPromptButton(panelRoot: HTMLElement): HTMLElement | null {
 }
 
 // ---------------------------------------------------------------------------
+// Resource panel search helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Find and use the search input in the resource panel to filter images by name.
+ * Returns true if a search input was found and the search term was typed.
+ */
+async function searchInResourcePanel(
+  panelRoot: HTMLElement,
+  searchTerm: string,
+): Promise<boolean> {
+  const selectors = [
+    'input[type="search"]',
+    'input[type="text"]',
+    '[role="searchbox"]',
+    'input[placeholder*="搜索"]',
+    'input[placeholder*="search"]',
+    'input[placeholder*="Search"]',
+    'input[aria-label*="搜索"]',
+    'input[aria-label*="search"]',
+  ];
+
+  let searchInput: HTMLInputElement | null = null;
+  for (const sel of selectors) {
+    searchInput = panelRoot.querySelector<HTMLInputElement>(sel);
+    if (searchInput && isVisible(searchInput)) break;
+    searchInput = null;
+  }
+
+  if (!searchInput) {
+    const allInputs = panelRoot.querySelectorAll<HTMLInputElement>("input");
+    for (const inp of allInputs) {
+      if (!isVisible(inp)) continue;
+      const t = inp.type.toLowerCase();
+      if (t === "file" || t === "hidden" || t === "checkbox" || t === "radio")
+        continue;
+      searchInput = inp;
+      break;
+    }
+  }
+
+  if (!searchInput) {
+    console.log("[FlowAuto] 资源面板未找到搜索框，将使用滚动查找");
+    return false;
+  }
+
+  searchInput.focus();
+  await randomSleep(200, 400);
+
+  searchInput.value = "";
+  searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+  searchInput.dispatchEvent(new Event("change", { bubbles: true }));
+  await randomSleep(200, 400);
+
+  for (const ch of searchTerm) {
+    searchInput.value += ch;
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(30 + Math.random() * 50);
+  }
+  searchInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+  await randomSleep(600, 1200);
+
+  console.log(`[FlowAuto] 资源面板搜索: "${searchTerm}"，等待过滤结果`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Quick-select: pick an already-uploaded image from the resource panel by UUID
 // ---------------------------------------------------------------------------
 
@@ -436,7 +387,7 @@ async function trySelectFromResourcePanel(
   try {
     const urlBefore = location.href;
     await openResourcePanel();
-    await sleep(800);
+    await randomSleep(600, 1200);
 
     // Scope search to the resource panel container to avoid clicking result
     // gallery images (which navigates to the image editor).
@@ -453,7 +404,19 @@ async function trySelectFromResourcePanel(
       `[FlowAuto] 资源面板容器: tag=${searchRoot.tagName}, role=${searchRoot.getAttribute("role")}, children=${searchRoot.querySelectorAll("img").length} imgs`,
     );
 
-    const match = await findImageByUuidWithScroll(searchRoot, mediaUuid);
+    const searched = await searchInResourcePanel(searchRoot, filename);
+
+    let match: HTMLImageElement | null;
+    if (searched) {
+      await randomSleep(300, 600);
+      match = findImageByUuid(searchRoot, mediaUuid);
+      if (!match) {
+        await randomSleep(500, 800);
+        match = findImageByUuid(searchRoot, mediaUuid);
+      }
+    } else {
+      match = await findImageByUuidWithScroll(searchRoot, mediaUuid);
+    }
 
     if (!match) {
       console.log(
@@ -502,11 +465,11 @@ async function trySelectFromResourcePanel(
     if (!selectedBefore) {
       // Prefer clicking the item container; then click image itself as backup.
       forceClick(clickTarget);
-      await sleep(220);
+      await randomSleep(180, 350);
       const isPanelStillOpen = document.body.contains(searchRoot) && isVisible(searchRoot);
       if (isPanelStillOpen && !isSelectedState(clickTarget) && clickTarget !== match) {
         forceClick(match);
-        await sleep(260);
+        await randomSleep(200, 400);
       }
     }
 
@@ -517,7 +480,7 @@ async function trySelectFromResourcePanel(
       if (attachBtn) {
         console.log('[FlowAuto] 资源面板: 检测到"添加到提示"按钮，执行确认');
         forceClick(attachBtn);
-        await sleep(320);
+        await randomSleep(250, 500);
       }
     }
 
@@ -689,7 +652,21 @@ async function tryClipboardPaste(
   );
   if (!promptInput) return false;
   promptInput.focus();
-  await sleep(200);
+  await randomSleep(200, 400);
+
+  // Collapse selection to end before pasting image — prevents the paste event
+  // from overwriting prompt text that might be selected (race condition with
+  // React re-render restoring selection state after text injection).
+  if (promptInput.isContentEditable) {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = document.createRange();
+      range.selectNodeContents(promptInput);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
 
   try {
     const file = new File([blob], filename, { type: blob.type || "image/png" });
@@ -702,7 +679,7 @@ async function tryClipboardPaste(
         clipboardData: dt,
       }),
     );
-    await sleep(1000);
+    await randomSleep(800, 1500);
     console.log("[FlowAuto] clipboard paste 事件已派发");
     return true;
   } catch (e) {
@@ -742,7 +719,7 @@ async function tryDragDrop(blob: Blob, filename: string): Promise<boolean> {
   dropTarget.dispatchEvent(new DragEvent("dragover", evtOpts));
   await sleep(50);
   dropTarget.dispatchEvent(new DragEvent("drop", evtOpts));
-  await sleep(1000);
+  await randomSleep(800, 1500);
   console.log("[FlowAuto] drag-drop 事件已派发");
   return true;
 }
@@ -877,7 +854,7 @@ export async function clearAttachedReferences(): Promise<void> {
     );
     forceClick(btn);
     cleared++;
-    await sleep(400);
+    await randomSleep(300, 600);
   }
 
   // Strategy 2: Clear inline images from the contenteditable by selecting all + deleting.
@@ -895,13 +872,13 @@ export async function clearAttachedReferences(): Promise<void> {
         new InputEvent("input", { bubbles: true, inputType: "deleteContent" }),
       );
       cleared += imgs.length;
-      await sleep(300);
+      await randomSleep(250, 500);
     }
   }
 
   if (cleared > 0) {
     console.log(`[FlowAuto] ✅ 已清除 ${cleared} 个参考图/内联图片`);
-    await sleep(500);
+    await randomSleep(400, 800);
   } else {
     console.log("[FlowAuto] 未发现需要清除的参考图");
   }
@@ -953,22 +930,8 @@ export async function injectImageToFlow(
 
   // ── Quick path: select from resource panel by UUID ─────────────────
   if (options?.mediaUuid) {
-    const beforeAttach = getPromptReferenceState();
     try {
       if (await trySelectFromResourcePanel(options.mediaUuid, filename)) {
-        const attached = await waitForReferenceAttached(
-          beforeAttach,
-          options.mediaUuid,
-        );
-        if (attached) {
-          console.log(`[FlowAuto] ✅ 资源面板附着确认成功: ${filename}`);
-          return { success: true, mediaUuid: options.mediaUuid };
-        }
-        console.warn(
-          `[FlowAuto] 资源面板点击后未检测到附着: ${filename}，按已选择继续（不立即回退上传）`,
-        );
-        // In practice Flow can attach asynchronously or via panel state that is
-        // hard to observe from DOM snapshots; avoid unnecessary re-upload loops.
         return { success: true, mediaUuid: options.mediaUuid };
       }
     } catch (e: any) {
@@ -1023,7 +986,7 @@ export async function injectImageToFlow(
       console.log(
         `[FlowAuto] ✅ 上传成功: ${filename}${newUuid ? ` (UUID=${newUuid})` : ""}`,
       );
-      await sleep(1000);
+      await randomSleep(800, 1500);
       return { success: true, mediaUuid: newUuid };
     }
     disarm();

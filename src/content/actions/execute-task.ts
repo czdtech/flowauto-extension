@@ -11,12 +11,15 @@ import {
   buildTaskBaseName,
 } from "../../shared/filename-utils";
 import { downloadTopNLatestWithNaming } from "./download";
-import { createAndWaitForGeneration } from "./generate";
+import {
+  collectResultImageSrcs,
+  createAndWaitForGeneration,
+} from "./generate";
 import { clearAttachedReferences, injectImageToFlow } from "./inject-image";
 import { setPromptText } from "./prompt";
 import { setAspectRatio, setMode, setModel, setOutputCount } from "./settings";
 import { getProjectName } from "../page-state";
-import { sleep } from "../utils/dom";
+import { randomSleep } from "../utils/dom";
 import { selectTab } from "./navigate";
 import { findPromptInput } from "../finders";
 
@@ -233,22 +236,22 @@ export async function executeTask(
 
   // Keep prompt area clean between tasks.
   await clearAttachedReferences();
-  await sleep(300);
+  await randomSleep(300, 600);
 
   await selectTab(mediaType === "image" ? "image" : "video");
-  await sleep(300);
+  await randomSleep(250, 500);
 
   await setMode(task.mode);
-  await sleep(200);
+  await randomSleep(150, 350);
 
   await setAspectRatio(task.aspectRatio);
   await setOutputCount(task.outputCount);
   await setModel(task.model);
-  await sleep(100);
+  await randomSleep(100, 250);
 
   log(`参数已就绪：${task.model} · ${task.aspectRatio} · x${task.outputCount}`);
   await setPromptText(task.prompt);
-  await sleep(300);
+  await randomSleep(300, 600);
   log("提示词已填写");
 
   // Attach reference images.  For images that were already uploaded in this
@@ -314,11 +317,18 @@ export async function executeTask(
         log(`参考图处理失败：${asset.filename}`);
         throw new Error(`参考图注入失败 (${asset.filename}): ${msg}`);
       }
+
+      // Allow Flow's UI to fully settle between sequential injections.
+      // Without this, a rapid second paste can displace the first attachment.
+      if (i < task.assets.length - 1) {
+        await randomSleep(1500, 2500);
+      }
     }
+
     log(
       `参考图已就绪：${attachedCount}/${task.assets.length}（复用 ${reusedCount}，上传 ${uploadedCount}）`,
     );
-    await sleep(1000);
+    await randomSleep(800, 1500);
   }
 
   const projectName = getProjectName() ?? "Flow";
@@ -328,6 +338,9 @@ export async function executeTask(
   let downloadedTotal = 0;
   let remaining = task.outputCount;
   let attempt = 0;
+  // Preserve the baseline from the first generation round so retries can
+  // detect images that loaded late (after the first round's Signal C).
+  let originalBaseline: Set<string> | null = null;
 
   while (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
     attempt++;
@@ -336,6 +349,44 @@ export async function executeTask(
         ? "开始生成"
         : `开始重试生成（第 ${attempt}/${MAX_GENERATION_ATTEMPTS} 次）`,
     );
+
+    // Before retrying, check if late-arriving images already cover the gap.
+    if (attempt > 1 && originalBaseline) {
+      const currentUrls = collectResultImageSrcs();
+      let totalNewSinceOriginal = 0;
+      for (const u of currentUrls) {
+        if (!originalBaseline.has(u)) totalNewSinceOriginal++;
+      }
+      if (totalNewSinceOriginal >= task.outputCount) {
+        const lateArrivals = totalNewSinceOriginal - downloadedTotal;
+        console.log(
+          `[FlowAuto] 重试前检查: 原始基线后已有 ${totalNewSinceOriginal} 张新图（已下载 ${downloadedTotal}），无需再生成`,
+        );
+        if (lateArrivals > 0) {
+          const toDownload = Math.min(lateArrivals, remaining);
+          log(`发现 ${lateArrivals} 张迟到的图片，直接下载`);
+          await downloadTopNLatestWithNaming(
+            task,
+            toDownload,
+            (outputIndex) => {
+              const finalIndex = downloadedTotal + outputIndex;
+              const baseCore = buildTaskBaseName(task, finalIndex);
+              const idTail = task.id.slice(-6);
+              return {
+                dir,
+                baseName: `${baseCore}__${idTail}`,
+                taskId: task.id,
+                outputIndex: finalIndex,
+              };
+            },
+            originalBaseline,
+          );
+          downloadedTotal += toDownload;
+          remaining = Math.max(0, task.outputCount - downloadedTotal);
+        }
+        break;
+      }
+    }
 
     if (attempt > 1) {
       try {
@@ -348,9 +399,17 @@ export async function executeTask(
           input.value += " ";
           input.dispatchEvent(new Event("input", { bubbles: true }));
         } else {
-          document.execCommand("insertText", false, " ");
+          const sel = window.getSelection();
+          if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(input);
+            range.collapse(false); // move to end
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand("insertText", false, " ");
+          }
         }
-        await sleep(500);
+        await randomSleep(400, 800);
       } catch (e) {
         console.warn("[FlowAuto] 重试前唤醒输入框失败:", e);
       }
@@ -367,17 +426,21 @@ export async function executeTask(
       console.warn(`[FlowAuto] 生成异常(第${attempt}次): ${msg}`);
       if (attempt < MAX_GENERATION_ATTEMPTS) {
         log(`生成异常，准备重试（还差 ${remaining}）`);
-        await sleep(1200);
+        await randomSleep(1000, 1800);
         continue;
       }
       throw new Error(`生成失败: ${msg}`);
+    }
+
+    if (attempt === 1) {
+      originalBaseline = round.baselineUrls;
     }
 
     const produced = round.newCount;
     if (produced <= 0) {
       if (attempt < MAX_GENERATION_ATTEMPTS) {
         log(`本轮未产出结果，准备重试（还差 ${remaining}）`);
-        await sleep(1200);
+        await randomSleep(1000, 1800);
         continue;
       }
       throw new Error("生成失败（无新产出）");
@@ -411,7 +474,7 @@ export async function executeTask(
 
     if (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
       log(`结果不足，自动补生成（剩余 ${remaining}）`);
-      await sleep(1200);
+      await randomSleep(1000, 1800);
     }
   }
 

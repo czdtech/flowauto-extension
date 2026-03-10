@@ -4,6 +4,11 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function randomSleep(minMs: number, maxMs: number): Promise<void> {
+  const ms = Math.round(minMs + Math.random() * (maxMs - minMs));
+  return sleep(ms);
+}
+
 export function isVisible(el: Element): el is HTMLElement {
   if (!(el instanceof HTMLElement)) return false;
   if (!el.isConnected) return false;
@@ -120,6 +125,17 @@ function selectAllContent(el: HTMLElement): void {
   }
 }
 
+function collapseSelectionToEnd(el: HTMLElement): void {
+  const sel = window.getSelection();
+  if (sel) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false); // false means collapse to end
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
 /**
  * Primary strategy: InputEvent with insertFromPaste.
  * Google Flow's Next.js editor handles beforeinput with 'insertFromPaste'
@@ -139,6 +155,7 @@ async function tryInsertFromPaste(el: HTMLElement, value: string): Promise<boole
     el.dispatchEvent(new InputEvent('input', {
       bubbles: true, cancelable: false, inputType: 'insertFromPaste',
     }));
+    collapseSelectionToEnd(el);
     return true;
   } catch {
     return false;
@@ -160,6 +177,7 @@ async function tryClipboardPaste(el: HTMLElement, value: string): Promise<boolea
     el.dispatchEvent(new InputEvent('input', {
       bubbles: true, cancelable: false, inputType: 'insertFromPaste',
     }));
+    collapseSelectionToEnd(el);
     return true;
   } catch {
     return false;
@@ -173,6 +191,7 @@ function tryExecCommand(el: HTMLElement, value: string): boolean {
   const ok = document.execCommand('insertText', false, value);
   // Dispatch compositionend for IME-aware editors
   el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: value }));
+  collapseSelectionToEnd(el);
   return ok && !!el.textContent?.includes(value.substring(0, 10));
 }
 

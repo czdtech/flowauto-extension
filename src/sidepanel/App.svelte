@@ -653,7 +653,7 @@
             <select
               class="sel"
               bind:value={s_defaultAspectRatio}
-              onchange={() => patchSettings({ defaultAspectRatio: s_defaultAspectRatio })}
+              onchange={(e) => patchSettings({ defaultAspectRatio: (e.target as HTMLSelectElement).value as any })}
             >
               <option value="9:16">9:16</option>
               <option value="16:9">16:9</option>
@@ -665,7 +665,7 @@
             <select
               class="sel"
               bind:value={s_defaultOutputCount}
-              onchange={() => patchSettings({ defaultOutputCount: Number(s_defaultOutputCount) })}
+              onchange={(e) => patchSettings({ defaultOutputCount: Number((e.target as HTMLSelectElement).value) })}
             >
               <option value={1}>1</option>
               <option value={2}>2</option>
@@ -679,7 +679,7 @@
             <select
               class="sel"
               bind:value={s_defaultModel}
-              onchange={() => patchSettings({ defaultModel: s_defaultModel })}
+              onchange={(e) => patchSettings({ defaultModel: (e.target as HTMLSelectElement).value as any })}
             >
               <optgroup label="视频与动画">
                 <option value="veo3.1-quality">Veo 3.1 - Quality</option>
@@ -700,7 +700,7 @@
             <select
               class="sel"
               bind:value={s_defaultDownloadResolution}
-              onchange={() => patchSettings({ defaultDownloadResolution: s_defaultDownloadResolution })}
+              onchange={(e) => patchSettings({ defaultDownloadResolution: (e.target as HTMLSelectElement).value as any })}
             >
               <option value="1K/720p">1K / 720p</option>
               <option value="2K/1080p">2K / 1080p</option>
@@ -716,7 +716,7 @@
               min="0"
               step="500"
               bind:value={s_interTaskDelayMs}
-              onchange={() => patchSettings({ interTaskDelayMs: Number(s_interTaskDelayMs) })}
+              onchange={(e) => patchSettings({ interTaskDelayMs: Number((e.target as HTMLInputElement).value) })}
             />
           </label>
         </div>
@@ -948,7 +948,8 @@
     padding-top: 5px;
     padding-bottom: 5px;
   }
-  .sel option {
+  .sel option,
+  .sel optgroup {
     background: #1e1e1e;
     color: #fff;
   }

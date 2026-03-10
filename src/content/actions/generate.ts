@@ -1,5 +1,5 @@
 import { findCreateButton, findPromptInput } from "../finders";
-import { forceClick, sleep, waitFor } from "../utils/dom";
+import { forceClick, randomSleep, waitFor } from "../utils/dom";
 
 export interface GenerationWaitResult {
   newCount: number;
@@ -61,9 +61,17 @@ export async function clickCreate(): Promise<void> {
         input.value += " ";
         input.dispatchEvent(new Event("input", { bubbles: true }));
       } else {
-        document.execCommand("insertText", false, " ");
+        const sel = window.getSelection();
+        if (sel) {
+          const range = document.createRange();
+          range.selectNodeContents(input);
+          range.collapse(false); // move to end
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand("insertText", false, " ");
+        }
       }
-      await sleep(500);
+      await randomSleep(400, 800);
     } catch (e) {
       console.warn("[FlowAuto] 唤醒按钮失败:", e);
     }
@@ -101,10 +109,10 @@ export async function waitForGenerationComplete(
   );
 
   // Give the request time to reach Flow's server.
-  await sleep(3000);
+  await randomSleep(3000, 4000);
 
   const STABLE_REQUIRED = 3; // 3 consecutive unchanged polls = ~6 s stable
-  const PARTIAL_STABLE_REQUIRED = 2; // partial results stable for ~4 s
+  const PARTIAL_STABLE_REQUIRED = 5; // partial results stable for ~10 s
   let stableCount = 0;
   let lastNewCount = -1;
   let noLoadingStableCount = 0;
@@ -163,17 +171,36 @@ export async function waitForGenerationComplete(
     // Huge containers (toolbar, gallery) have thousands of characters.
     if (text.length > 500 || text.length < 4) return;
 
+    const lowerText = text.toLowerCase();
+
+    // Content policy violations
     if (
       text.includes("失败") &&
       (text.includes("政策") || text.includes("违反"))
     ) {
-      // Verify the element is visible and card-sized (not a tiny hidden span)
       const rect = node.getBoundingClientRect();
       if (rect.width > 50 && rect.height > 50) {
         console.error(
           `[FlowAuto] ❌ 信号D(MutationObserver): 检测到新失败卡片: "${text.substring(0, 100)}"`,
         );
         generationError = `生成失败（内容策略）: ${text.substring(0, 100)}`;
+        return;
+      }
+    }
+
+    // Prompt-related errors (e.g. "prompt must be provided", "请提供提示词")
+    if (
+      lowerText.includes("prompt must be provided") ||
+      lowerText.includes("prompt is required") ||
+      text.includes("请提供提示") ||
+      text.includes("必须提供提示")
+    ) {
+      const rect = node.getBoundingClientRect();
+      if (rect.width > 30 && rect.height > 10) {
+        console.error(
+          `[FlowAuto] ❌ 信号D(MutationObserver): 检测到提示词错误: "${text.substring(0, 100)}"`,
+        );
+        generationError = `生成失败（提示词错误）: ${text.substring(0, 100)}`;
       }
     }
   };
@@ -368,7 +395,7 @@ export async function waitForGenerationComplete(
   }
 
   // Brief stabilization before download.
-  await sleep(1500);
+  await randomSleep(1200, 2000);
 
   // Final resync for accurate logging + downstream baseline filtering.
   const finalUrls = collectResultImageSrcs();
@@ -388,7 +415,7 @@ export async function createAndWaitForGeneration(options: {
   timeoutMs: number;
 }): Promise<GenerationWaitResult> {
   await clickCreate();
-  await sleep(500);
+  await randomSleep(400, 800);
   return await waitForGenerationComplete(
     options.expectedCount,
     options.timeoutMs,
