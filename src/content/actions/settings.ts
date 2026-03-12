@@ -253,10 +253,6 @@ function modelOptionKeywords(model: TaskItem["model"]): string[] {
       return ["Veo 3.1 - Fast"];
     case "veo3.1-quality":
       return ["Veo 3.1 - Quality"];
-    case "veo2-fast":
-      return ["Veo 2 - Fast"];
-    case "veo2-quality":
-      return ["Veo 2 - Quality"];
     case "nano-banana-pro":
       return ["Banana Pro"];
     case "nano-banana-2":

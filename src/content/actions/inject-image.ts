@@ -116,53 +116,7 @@ function collectMediaUuids(): Set<string> {
   return uuids;
 }
 
-function findImageByUuid(
-  root: ParentNode,
-  mediaUuid: string,
-): HTMLImageElement | null {
-  const imgs = root.querySelectorAll<HTMLImageElement>("img");
-  for (const img of imgs) {
-    if (!isVisible(img)) continue;
-    const src = (img.src || "") + (img.getAttribute("data-src") || "");
-    if (src.includes(mediaUuid)) return img;
-  }
-  return null;
-}
 
-async function findImageByUuidWithScroll(
-  panelRoot: HTMLElement,
-  mediaUuid: string,
-): Promise<HTMLImageElement | null> {
-  let found = findImageByUuid(panelRoot, mediaUuid);
-  if (found) return found;
-
-  const scrollables = Array.from(
-    panelRoot.querySelectorAll<HTMLElement>("*"),
-  ).filter(
-    (el) =>
-      el.scrollHeight > el.clientHeight + 40 &&
-      (el.style.overflowY === "auto" ||
-        el.style.overflowY === "scroll" ||
-        getComputedStyle(el).overflowY === "auto" ||
-        getComputedStyle(el).overflowY === "scroll"),
-  );
-
-  for (const sc of scrollables) {
-    // Scan downward in chunks; stop when we can no longer scroll.
-    let lastTop = -1;
-    for (let i = 0; i < 12; i++) {
-      const step = Math.max(180, Math.floor(sc.clientHeight * 0.75));
-      sc.scrollTop = i === 0 ? 0 : sc.scrollTop + step;
-      await sleep(180);
-      found = findImageByUuid(panelRoot, mediaUuid);
-      if (found) return found;
-      if (sc.scrollTop === lastTop) break;
-      lastTop = sc.scrollTop;
-    }
-  }
-
-  return null;
-}
 
 function isSelectedState(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -288,10 +242,55 @@ async function searchInResourcePanel(
   }
   searchInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-  await randomSleep(600, 1200);
+  // Only a brief initial pause; the caller will use waitForSearchResultsStable
+  // to adaptively wait for the full filter result.
+  await randomSleep(300, 500);
 
   console.log(`[FlowAuto] 资源面板搜索: "${searchTerm}"，等待过滤结果`);
   return true;
+}
+
+/**
+ * Wait until the list of visible items inside `panelRoot` stabilises after
+ * a search/filter operation.  We watch the total element count (not img src
+ * loading) since we match items by text labels, which render immediately.
+ */
+async function waitForSearchResultsStable(
+  panelRoot: HTMLElement,
+  opts?: { timeoutMs?: number; intervalMs?: number; stableCount?: number },
+): Promise<void> {
+  const timeoutMs = opts?.timeoutMs ?? 5000;
+  const intervalMs = opts?.intervalMs ?? 400;
+  const stableCount = opts?.stableCount ?? 3;
+
+  const start = Date.now();
+  let lastCount = -1;
+  let streak = 0;
+
+  while (Date.now() - start < timeoutMs) {
+    await sleep(intervalMs);
+
+    const currentCount = panelRoot.querySelectorAll<HTMLElement>(
+      'li, [role="option"], [role="listitem"]',
+    ).length || panelRoot.querySelectorAll("img").length;
+
+    if (currentCount === lastCount) {
+      streak++;
+      if (streak >= stableCount) {
+        console.log(
+          `[FlowAuto] 搜索结果已稳定: ${currentCount} 项 (${streak} 次不变, ${Date.now() - start}ms)`,
+        );
+        return;
+      }
+    } else {
+      streak = 0;
+      lastCount = currentCount;
+    }
+  }
+
+  console.log(
+    `[FlowAuto] 搜索结果等待超时 (${timeoutMs}ms), 当前 ${lastCount} 项`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -372,16 +371,19 @@ function findResourcePanelContainer(): HTMLElement | null {
 
 /**
  * Try to attach an image by selecting it from Flow's resource panel using
- * the media UUID captured during a previous upload.  Each image in Flow has
- * a unique UUID (e.g. "0d3594ba-5a07-4c93-a9d6-9c692bf7ba2d") which appears
- * in thumbnail src URLs as `media.getMediaUrlRedirect?name=UUID`.
+ * **filename text matching**.  Flow's resource panel search performs exact
+ * filename matching — when we type a filename into the search box, the
+ * first matching item in the left-side list IS the target.  We just need
+ * to find and click that item by its text label.
  *
- * IMPORTANT: We restrict the image search to within the resource panel
- * container to avoid accidentally matching result gallery images, which
- * would cause a navigation to the image editor view.
+ * This is far more reliable than scanning thumbnail `img.src` for UUIDs,
+ * because text labels are available immediately while `src` attributes
+ * are lazy-loaded via `media.getMediaUrlRedirect`.
+ *
+ * IMPORTANT: We restrict the search to within the resource panel
+ * container to avoid accidentally matching result gallery images.
  */
 async function trySelectFromResourcePanel(
-  mediaUuid: string,
   filename: string,
 ): Promise<boolean> {
   try {
@@ -389,8 +391,7 @@ async function trySelectFromResourcePanel(
     await openResourcePanel();
     await randomSleep(600, 1200);
 
-    // Scope search to the resource panel container to avoid clicking result
-    // gallery images (which navigates to the image editor).
+    // Scope search to the resource panel container.
     const panelRoot = findResourcePanelContainer();
     const searchRoot = panelRoot ?? null;
 
@@ -405,70 +406,46 @@ async function trySelectFromResourcePanel(
     );
 
     const searched = await searchInResourcePanel(searchRoot, filename);
-
-    let match: HTMLImageElement | null;
-    if (searched) {
-      await randomSleep(300, 600);
-      match = findImageByUuid(searchRoot, mediaUuid);
-      if (!match) {
-        await randomSleep(500, 800);
-        match = findImageByUuid(searchRoot, mediaUuid);
-      }
-    } else {
-      match = await findImageByUuidWithScroll(searchRoot, mediaUuid);
+    if (!searched) {
+      console.log("[FlowAuto] 未找到搜索框，跳过资源面板选择");
+      await closeResourcePanel().catch(() => {});
+      return false;
     }
+
+    // Wait for the search to filter the list. We use a short stable wait
+    // on element count (not img src) since we're matching by text, not UUID.
+    await waitForSearchResultsStable(searchRoot, {
+      timeoutMs: 5000,
+      intervalMs: 400,
+      stableCount: 3,
+    });
+
+    // Find a clickable item whose text label matches the filename.
+    const match = findItemByFilenameText(searchRoot, filename);
 
     if (!match) {
       console.log(
-        `[FlowAuto] 资源面板未找到 UUID=${mediaUuid} (${filename})，回退到上传`,
+        `[FlowAuto] 资源面板搜索 "${filename}" 无精确匹配项，回退到上传`,
       );
       await closeResourcePanel().catch(() => {});
       return false;
     }
 
-    // Walk up to find the clickable container wrapping the thumbnail,
-    // but STOP at the panel boundary to prevent clicking gallery cards.
-    let clickTarget: HTMLElement = match;
-    for (
-      let p: HTMLElement | null = match.parentElement;
-      p;
-      p = p.parentElement
-    ) {
-      if (
-        p === searchRoot ||
-        p === document.body ||
-        p === document.documentElement
-      )
-        break;
-      const tag = p.tagName;
-      const role = p.getAttribute("role");
-      if (
-        tag === "LI" ||
-        tag === "BUTTON" ||
-        role === "option" ||
-        role === "button" ||
-        role === "listitem" ||
-        p.getAttribute("tabindex") !== null
-      ) {
-        clickTarget = p;
-        break;
-      }
-      // Do NOT walk up through <a> tags — those are links that would navigate.
-      if (tag === "A") break;
-    }
-
-    const selectedBefore =
-      isSelectedState(clickTarget) || isSelectedState(match);
     console.log(
-      `[FlowAuto] 资源面板: 找到 "${filename}" (UUID=${mediaUuid.substring(0, 8)}…)，点击选择 (tag=${clickTarget.tagName})`,
+      `[FlowAuto] 资源面板: 找到 "${filename}"，点击选择 (tag=${match.tagName})`,
     );
-    if (!selectedBefore) {
-      // Prefer clicking the item container; then click image itself as backup.
-      forceClick(clickTarget);
-      await randomSleep(180, 350);
-      const isPanelStillOpen = document.body.contains(searchRoot) && isVisible(searchRoot);
-      if (isPanelStillOpen && !isSelectedState(clickTarget) && clickTarget !== match) {
-        forceClick(match);
+    forceClick(match);
+    await randomSleep(300, 600);
+
+    // If the panel is still open (some UI variants require an extra click
+    // on the image itself inside the selected item), try clicking an img
+    // child as backup.
+    const isPanelStillOpen =
+      document.body.contains(searchRoot) && isVisible(searchRoot);
+    if (isPanelStillOpen && !isSelectedState(match)) {
+      const imgChild = match.querySelector<HTMLImageElement>("img");
+      if (imgChild) {
+        forceClick(imgChild);
         await randomSleep(200, 400);
       }
     }
@@ -484,7 +461,7 @@ async function trySelectFromResourcePanel(
       }
     }
 
-    // Navigation guard: check if clicking caused an unintended page navigation.
+    // Navigation guard.
     if (location.href !== urlBefore) {
       console.error(
         `[FlowAuto] ❌ 资源面板点击导致页面导航! ${urlBefore} → ${location.href}`,
@@ -493,14 +470,13 @@ async function trySelectFromResourcePanel(
       return false;
     }
 
-    const selectedAfter =
-      isSelectedState(clickTarget) || isSelectedState(match);
-    const panelClosed = !document.body.contains(searchRoot) || !isVisible(searchRoot);
+    const panelClosed =
+      !document.body.contains(searchRoot) || !isVisible(searchRoot);
 
     await closeResourcePanel().catch(() => {});
 
     console.log(
-      `[FlowAuto] ✅ 从资源面板选择成功: ${filename}${selectedAfter ? " (selected)" : attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
+      `[FlowAuto] ✅ 从资源面板选择成功: ${filename}${attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
     );
     return true;
   } catch (e: any) {
@@ -508,6 +484,127 @@ async function trySelectFromResourcePanel(
     await closeResourcePanel().catch(() => {});
     return false;
   }
+}
+
+/**
+ * Find a clickable item in the resource panel whose **visible label**
+ * exactly equals the target filename (case-insensitive).
+ *
+ * IMPORTANT: Flow's list items include Material Icon font names in their
+ * `textContent` (e.g. the DOM text is `"image1.jpg"` not `"1.jpg"`).
+ * We handle this by:
+ *   1. Extracting only the "real" text (ignoring icon font elements)
+ *   2. Falling back to `endsWith` matching on full textContent
+ *
+ * Returns the element only when a match is found; `null` otherwise.
+ */
+function findItemByFilenameText(
+  root: HTMLElement,
+  filename: string,
+): HTMLElement | null {
+  const target = filename.trim().toLowerCase();
+  if (!target) return null;
+
+  // Collect ALL descendants — list items might be plain divs in Flow.
+  // We check a broad set of selectors plus any element with images.
+  const candidates = root.querySelectorAll<HTMLElement>(
+    'li, [role="option"], [role="listitem"], [role="button"], button, [tabindex], div',
+  );
+
+  const debugTexts: string[] = [];
+
+  for (const el of candidates) {
+    if (!isVisible(el)) continue;
+    if (el === root) continue;
+
+    // Strategy 1: Extract text from direct text nodes only (skips icon fonts)
+    const directText = getDirectTextContent(el).trim().toLowerCase();
+    // Strategy 2: Full textContent (may include icon names)
+    const fullText = (el.textContent || "").trim().toLowerCase();
+
+    if (!fullText) continue;
+    // Skip elements that are clearly not filename items (too long, contain
+    // unrelated UI text like "搜索资源", "最近使用过", etc.)
+    if (fullText.length > 100) continue;
+
+    // Collect debug info (first 10 items only)
+    if (debugTexts.length < 10) {
+      debugTexts.push(
+        `[${el.tagName}] direct="${directText}" full="${fullText}"`,
+      );
+    }
+
+    // Exact match on direct text (best case)
+    if (directText === target) {
+      console.log(
+        `[FlowAuto] 文件名精确匹配 (directText): "${directText}" === "${target}"`,
+      );
+      return el;
+    }
+
+    // Exact match on full text (in case there are no icon issues)
+    if (fullText === target) {
+      console.log(
+        `[FlowAuto] 文件名精确匹配 (fullText): "${fullText}" === "${target}"`,
+      );
+      return el;
+    }
+
+    // endsWith match: textContent is "image1.jpg", target is "1.jpg"
+    // Only match if the text ENDS with the target and is not too much longer
+    // (to avoid false matches with long descriptions).
+    if (
+      fullText.endsWith(target) &&
+      fullText.length <= target.length + 30
+    ) {
+      console.log(
+        `[FlowAuto] 文件名尾部匹配: "${fullText}" endsWith "${target}"`,
+      );
+      return el;
+    }
+  }
+
+  // Log debug info for troubleshooting
+  console.log(
+    `[FlowAuto] 面板中无满足精确匹配的项 (搜索目标: "${target}")`,
+    debugTexts.length > 0
+      ? `候选项: ${debugTexts.join(" | ")}`
+      : "无候选项",
+  );
+  return null;
+}
+
+/**
+ * Extract text content from an element's DIRECT text nodes and non-icon
+ * child elements only.  This strips out Material Icon font text (rendered
+ * via `<span class="material-symbols-*">icon_name</span>` or `<i>`).
+ */
+function getDirectTextContent(el: HTMLElement): string {
+  let text = "";
+  for (const node of el.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent || "";
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const child = node as HTMLElement;
+      const tag = child.tagName;
+      const cls = (child.className || "").toLowerCase();
+      // Skip icon elements
+      if (
+        tag === "I" ||
+        tag === "SVG" ||
+        tag === "MAT-ICON" ||
+        cls.includes("material") ||
+        cls.includes("icon") ||
+        cls.includes("goog-icon") ||
+        child.getAttribute("aria-hidden") === "true"
+      ) {
+        continue;
+      }
+      // Recurse into non-icon children
+      text += getDirectTextContent(child);
+    }
+  }
+  return text;
 }
 
 // ---------------------------------------------------------------------------
@@ -928,10 +1025,13 @@ export async function injectImageToFlow(
     );
   }
 
-  // ── Quick path: select from resource panel by UUID ─────────────────
+  // ── Quick path: select from resource panel by filename ──────────────
+  // If the image was previously uploaded (we have a persisted or session
+  // UUID), try to find and click it by filename in the resource panel.
+  // This is much faster than re-uploading.
   if (options?.mediaUuid) {
     try {
-      if (await trySelectFromResourcePanel(options.mediaUuid, filename)) {
+      if (await trySelectFromResourcePanel(filename)) {
         return { success: true, mediaUuid: options.mediaUuid };
       }
     } catch (e: any) {

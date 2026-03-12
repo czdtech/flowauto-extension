@@ -11,9 +11,49 @@ import {
 } from './queue-engine';
 import { tryInjectContentScripts } from './content-injection';
 
+/** Check whether a tab URL points to a Flow project. */
+function isFlowProjectUrl(url: string): boolean {
+  return url.startsWith('https://labs.google/') && url.includes('/tools/flow/project/');
+}
+
+/** Try to get a valid Flow project tab. Priority:
+ *  1. The previously-locked tab (if still alive & on a Flow project page).
+ *  2. The current active tab (if it's a Flow project page).
+ *  3. Any tab that is on a Flow project page.
+ */
+async function resolveFlowTab(lockedTabId?: number): Promise<chrome.tabs.Tab | undefined> {
+  // 1. Check locked tab first.
+  if (lockedTabId !== undefined) {
+    const tab = await getTabById(lockedTabId);
+    if (tab && isFlowProjectUrl(tab.url ?? '')) return tab;
+  }
+
+  // 2. Check active tab.
+  const active = await getActiveTab();
+  if (active?.id && isFlowProjectUrl(active.url ?? '')) return active;
+
+  // 3. Scan all tabs for a Flow project page.
+  const allTabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+    chrome.tabs.query({}, (tabs) => resolve(tabs ?? []));
+  });
+  return allTabs.find((t) => t.id !== undefined && isFlowProjectUrl(t.url ?? ''));
+}
+
 function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0]));
+  });
+}
+
+function getTabById(tabId: number): Promise<chrome.tabs.Tab | undefined> {
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        resolve(undefined);
+      } else {
+        resolve(tab);
+      }
+    });
   });
 }
 
@@ -55,6 +95,10 @@ async function runLoop(): Promise<void> {
   // This runner can be restarted by calling kickRunner again.
   // NOTE: MV3 service workers can be suspended; we keep it simple for now.
 
+  // Resolve the Flow project tab ONCE at the start and lock onto it.
+  // This allows the user to switch to other tabs without breaking execution.
+  let lockedTabId: number | undefined;
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const { queue, settings } = await getAppState();
@@ -68,14 +112,16 @@ async function runLoop(): Promise<void> {
 
     await markTaskRunning(next.id);
 
-    const tab = await getActiveTab();
-    const url = tab?.url ?? '';
-    const isFlowProject = url.startsWith('https://labs.google/') && url.includes('/tools/flow/project/');
-    if (!tab?.id || !isFlowProject) {
+    // Re-verify the locked tab before each task (it may have been closed or navigated away).
+    const tab = await resolveFlowTab(lockedTabId);
+    if (!tab?.id) {
       await markTaskError(next.id, '未找到可用的 Flow 项目页（请切到 Flow 项目页标签后重试）');
       await setRunning(false);
       return;
     }
+
+    // Lock onto this tab for all subsequent tasks in this loop.
+    lockedTabId = tab.id;
 
     try {
       await tryInjectContentScripts(tab.id);
@@ -99,4 +145,5 @@ async function runLoop(): Promise<void> {
     await sleep(Math.max(0, settings.interTaskDelayMs));
   }
 }
+
 

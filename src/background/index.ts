@@ -62,6 +62,14 @@ function initSidePanelBehavior(): void {
     } as any);
     if (maybe && typeof (maybe as any).catch === "function")
       (maybe as any).catch(() => {});
+
+    // Globally disable the side panel so it does NOT follow the user across tabs.
+    // We enable it on a per-tab basis when the user clicks the extension action.
+    if (chrome.sidePanel.setOptions) {
+      const opt = chrome.sidePanel.setOptions({ enabled: false } as any);
+      if (opt && typeof (opt as any).catch === "function")
+        (opt as any).catch(() => {});
+    }
   } catch {
     // ignore
   }
@@ -78,7 +86,8 @@ chrome.action.onClicked.addListener((tab) => {
     // This avoids the common "未检测到内容脚本（可能未刷新页面）" issue after extension reload.
     void tryInjectContentScripts(tab.id);
 
-    // Ensure enabled & correct path for the current tab before opening.
+    // Enable the side panel ONLY for this specific tab.
+    // The global default is disabled, so switching to another tab will hide the panel.
     if (chrome.sidePanel.setOptions) {
       const maybe = chrome.sidePanel.setOptions({
         tabId: tab.id,

@@ -13,12 +13,16 @@ export type GenerationMode =
   | "camera-control";
 
 export type VeoModel =
-  | "veo2-fast"
-  | "veo2-quality"
   | "veo3.1-fast"
   | "veo3.1-quality";
 export type ImageModel = "nano-banana-2" | "nano-banana-pro" | "imagen4";
 export type AnyModel = VeoModel | ImageModel;
+
+export type GenerationType =
+  | "text-to-image"
+  | "image-to-image"
+  | "text-to-video"
+  | "image-to-video";
 
 /** Returns true if the model generates images (as opposed to videos). */
 export function isImageModel(model: AnyModel): boolean {
@@ -94,6 +98,7 @@ export interface QueueState {
 
 export interface UserSettings {
   defaultModel: AnyModel;
+  defaultGenerationType: GenerationType;
   defaultAspectRatio: AspectRatio;
   defaultOutputCount: number;
   interTaskDelayMs: number;
@@ -101,7 +106,8 @@ export interface UserSettings {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  defaultModel: "veo3.1-quality",
+  defaultModel: "nano-banana-2",
+  defaultGenerationType: "text-to-image",
   defaultAspectRatio: "9:16",
   defaultOutputCount: 1,
   interTaskDelayMs: 5000,

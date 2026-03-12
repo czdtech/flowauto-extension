@@ -20,7 +20,7 @@
     SettingsUpdateRequest,
   } from '../shared/protocol';
   import { modeForModel } from '../shared/types';
-  import type { GenerationMode, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
+  import type { GenerationMode, GenerationType, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
 
@@ -42,7 +42,8 @@
   let queueError = '';
   let filter: 'all' | TaskStatus = 'all';
 
-  let s_defaultModel: UserSettings['defaultModel'] = 'veo3.1-quality';
+  let s_defaultModel: UserSettings['defaultModel'] = 'nano-banana-2';
+  let s_defaultGenerationType: GenerationType = 'text-to-image';
   let s_defaultAspectRatio: '16:9' | '9:16' = '9:16';
   let s_defaultOutputCount = 1;
   let s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'] = '2K/1080p';
@@ -332,9 +333,13 @@
   }
 
   $: effectiveModeForAdd = ((): GenerationMode => {
-    if (activeTopTab === 'image') return 'create-image';
-    if (activeTopTab === 'video') return 'text-to-video';
-    return modeForModel(s_defaultModel);
+    switch (s_defaultGenerationType) {
+      case 'image-to-video': return 'frames-first';
+      case 'text-to-video': return 'text-to-video';
+      case 'text-to-image':
+      case 'image-to-image': return 'create-image';
+      default: return modeForModel(s_defaultModel);
+    }
   })();
 
   async function refreshPageState(): Promise<void> {
@@ -398,6 +403,7 @@
   function syncSettingsDraft(next: UserSettings | null): void {
     if (!next) return;
     s_defaultModel = next.defaultModel;
+    s_defaultGenerationType = next.defaultGenerationType ?? 'text-to-image';
     s_defaultAspectRatio = next.defaultAspectRatio;
     s_defaultOutputCount = next.defaultOutputCount;
     s_defaultDownloadResolution = next.defaultDownloadResolution;
@@ -604,50 +610,40 @@
 <main>
   <header>
     <div class="title">FlowAuto</div>
-    <button class="btn" onclick={ping}>刷新连接</button>
+    <div class="header-status">
+      {#if status === 'connected'}
+        <span class="status ok" title={title || 'Flow 项目页'}>已连接：{title || 'Flow 项目页'}</span>
+      {:else if status === 'checking'}
+        <span class="status warn">检测中…</span>
+      {:else}
+        <strong class="status bad">未连接</strong>
+        <span class="header-meta">({reasonText(reason)})</span>
+      {/if}
+    </div>
+    <button class="btn refresh-btn" onclick={ping}>刷新连接</button>
   </header>
-
-  <section class="card">
-    {#if status === 'connected'}
-      <div class="status ok">已连接：Flow 项目页</div>
-    {:else if status === 'checking'}
-      <div class="status warn">检测中…</div>
-    {:else}
-      <div class="status bad">未连接</div>
-      <div class="reason">{reasonText(reason)}</div>
-    {/if}
-
-    {#if url}
-      <div class="meta">
-        <div class="k">URL</div>
-        <div class="v">{url}</div>
-      </div>
-    {/if}
-    {#if title}
-      <div class="meta">
-        <div class="k">Title</div>
-        <div class="v">{title}</div>
-      </div>
-    {/if}
-    {#if lastCheckedAt}
-      <div class="meta">
-        <div class="k">Last</div>
-        <div class="v">{new Date(lastCheckedAt).toLocaleTimeString()}</div>
-      </div>
-    {/if}
-    {#if status === 'connected' && activeTopTab !== 'unknown'}
-      <div class="meta">
-        <div class="k">Tab</div>
-        <div class="v">{topTabText(activeTopTab)}</div>
-      </div>
-    {/if}
-  </section>
 
   <section class="card card-gap">
     {#if settings}
       <details class="settings" open>
         <summary>默认设置</summary>
         <div class="grid">
+          <label>
+            <div class="lab">生成方式</div>
+            <select
+              class="sel"
+              bind:value={s_defaultGenerationType}
+              onchange={(e) => patchSettings({ defaultGenerationType: (e.target as HTMLSelectElement).value as any })}
+            >
+              <option value="text-to-image">文生图</option>
+              <option value="image-to-image">图生图</option>
+              <option value="text-to-video">文生视频</option>
+              <option value="image-to-video">图生视频</option>
+            </select>
+          </label>
+
+
+
           <label>
             <div class="lab">画幅</div>
             <select
@@ -681,16 +677,14 @@
               bind:value={s_defaultModel}
               onchange={(e) => patchSettings({ defaultModel: (e.target as HTMLSelectElement).value as any })}
             >
-              <optgroup label="视频与动画">
-                <option value="veo3.1-quality">Veo 3.1 - Quality</option>
-                <option value="veo3.1-fast">Veo 3.1 - Fast</option>
-                <option value="veo2-quality">Veo 2 - Quality</option>
-                <option value="veo2-fast">Veo 2 - Fast</option>
-              </optgroup>
               <optgroup label="图像生成">
                 <option value="nano-banana-pro">Nano Banana Pro</option>
                 <option value="nano-banana-2">Nano Banana 2</option>
                 <option value="imagen4">Imagen 4</option>
+              </optgroup>
+              <optgroup label="视频与动画">
+                <option value="veo3.1-quality">Veo 3.1 - Quality</option>
+                <option value="veo3.1-fast">Veo 3.1 - Fast</option>
               </optgroup>
             </select>
           </label>
@@ -739,14 +733,16 @@
       </button>
     </div>
 
-    <div class="import-row">
-      <button class="btn btn-folder" onclick={() => multiFileInput?.click()} title="Ctrl多选 .txt + 图片文件 → 自动匹配">
-        📎 导入 txt + 图片
-      </button>
-    </div>
-    <div class="import-hint">
-      Ctrl+点击 同时选中 .txt 和图片文件。提示词中直接写图片文件名可引用多张参考图；也支持 1图N词、N图1词、M×N 等自动匹配。
-    </div>
+    {#if s_defaultGenerationType === 'image-to-image' || s_defaultGenerationType === 'image-to-video'}
+      <div class="import-row">
+        <button class="btn btn-folder" onclick={() => multiFileInput?.click()} title="Ctrl多选 .txt + 图片文件 → 自动匹配">
+          📎 导入 txt + 图片
+        </button>
+      </div>
+      <div class="import-hint">
+        Ctrl+点击 同时选中 .txt 和图片文件。提示词中直接写图片文件名可引用多张参考图；也支持 1图N词、N图1词、M×N 等自动匹配。
+      </div>
+    {/if}
 
     {#if folderImportStatus}
       <div class="import-status">{folderImportStatus}</div>
@@ -856,13 +852,31 @@
   header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
   }
   .title {
     font-weight: 700;
     letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .header-status {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .header-meta {
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .btn.refresh-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .card-gap {
     margin-top: 12px;
@@ -1217,7 +1231,9 @@
   }
   .status {
     font-weight: 650;
-    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .status.ok {
     color: #7ee787;
@@ -1227,25 +1243,6 @@
   }
   .status.bad {
     color: #ff7b72;
-  }
-  .reason {
-    opacity: 0.9;
-    margin-bottom: 8px;
-  }
-  .meta {
-    display: grid;
-    grid-template-columns: 54px 1fr;
-    gap: 8px;
-    margin-top: 8px;
-  }
-  .k {
-    opacity: 0.65;
-    font-size: 12px;
-  }
-  .v {
-    font-size: 12px;
-    word-break: break-all;
-    line-height: 1.35;
   }
   footer {
     margin-top: 12px;
