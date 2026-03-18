@@ -1,4 +1,5 @@
 import { MSG } from "../../shared/constants";
+import { TIMING } from "../../shared/config";
 import type {
   RefMediaLookupRequest,
   RefMediaLookupResponse,
@@ -236,22 +237,22 @@ export async function executeTask(
 
   // Keep prompt area clean between tasks.
   await clearAttachedReferences();
-  await randomSleep(300, 600);
+  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
 
   await selectTab(mediaType === "image" ? "image" : "video");
-  await randomSleep(250, 500);
+  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
 
   await setMode(task.mode);
-  await randomSleep(150, 350);
+  await randomSleep(TIMING.SHORT_MIN, TIMING.MEDIUM_MIN);
 
   await setAspectRatio(task.aspectRatio);
   await setOutputCount(task.outputCount);
   await setModel(task.model);
-  await randomSleep(100, 250);
+  await randomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX);
 
   log(`参数已就绪：${task.model} · ${task.aspectRatio} · x${task.outputCount}`);
   await setPromptText(task.prompt);
-  await randomSleep(300, 600);
+  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
   log("提示词已填写");
 
   // Attach reference images.  For images that were already uploaded in this
@@ -321,14 +322,14 @@ export async function executeTask(
       // Allow Flow's UI to fully settle between sequential injections.
       // Without this, a rapid second paste can displace the first attachment.
       if (i < task.assets.length - 1) {
-        await randomSleep(1500, 2500);
+        await randomSleep(TIMING.BETWEEN_ASSETS_MIN, TIMING.BETWEEN_ASSETS_MAX);
       }
     }
 
     log(
       `参考图已就绪：${attachedCount}/${task.assets.length}（复用 ${reusedCount}，上传 ${uploadedCount}）`,
     );
-    await randomSleep(800, 1500);
+    await randomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX);
   }
 
   const projectName = getProjectName() ?? "Flow";
@@ -413,6 +414,7 @@ export async function executeTask(
       } catch (e) {
         console.warn("[FlowAuto] 重试前唤醒输入框失败:", e);
       }
+      await randomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX);
     }
 
     let round: { newCount: number; baselineUrls: Set<string> };

@@ -1,4 +1,5 @@
 import { MSG } from '../../shared/constants';
+import { TIMING } from '../../shared/config';
 import { isVisible, randomSleep } from '../utils/dom';
 import { querySelectorAllDeep } from '../finders';
 import type { TaskItem } from '../../shared/types';
@@ -67,7 +68,7 @@ async function getGridDownloadButtons(baselineUrls?: Set<string>): Promise<{btn:
             current.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
             current = current.parentElement;
         }
-        await randomSleep(300, 600); // UI stabilization after hover
+        await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
 
         // Find the card container (the highest ancestor we hovered, or just search up to 4 levels)
         let searchRoot: HTMLElement | null = img;
@@ -171,7 +172,7 @@ export async function downloadTopNLatestWithNaming(
               baseName: hint.baseName,
             });
             downloadedCount++;
-            await randomSleep(1200, 2000);
+            await randomSleep(TIMING.URL_DOWNLOAD_MIN, TIMING.URL_DOWNLOAD_MAX);
           }
         }
         
@@ -239,7 +240,7 @@ export async function downloadTopNLatestWithNaming(
         }
       }, 100);
     }
-    await randomSleep(300, 600); // UI stabilization for menu
+    await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
     
     // 3. Find the menu items
     let menuItems = querySelectorAllDeep<HTMLElement>('[role="menuitem"]').filter(isVisible);
@@ -266,7 +267,7 @@ export async function downloadTopNLatestWithNaming(
            dlItem.dispatchEvent(new MouseEvent('mouseover', evtOpts));
            dlItem.dispatchEvent(new MouseEvent('mousemove', evtOpts));
            
-           await randomSleep(300, 600);
+           await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
            
            // Check if submenu appeared (look for resolution items like 1K/2K/4K)
            let subItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
@@ -280,7 +281,7 @@ export async function downloadTopNLatestWithNaming(
              // Phase 2: Hover didn't expand submenu - try click as fallback
              console.log(`[FlowAuto Debug] 悬浮未展开子菜单，尝试 click()...`);
              dlItem.click();
-             await randomSleep(600, 1000);
+             await randomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX);
              subItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
                .filter((el): el is HTMLElement => el instanceof HTMLElement && isVisible(el));
            }
@@ -322,7 +323,7 @@ export async function downloadTopNLatestWithNaming(
           baseName: hint.baseName,
         });
         downloadedCount++;
-        await randomSleep(1200, 2000);
+        await randomSleep(TIMING.URL_DOWNLOAD_MIN, TIMING.URL_DOWNLOAD_MAX);
       } else {
         console.warn(`[FlowAuto Debug] 未能提取到图片的URL`);
       }
@@ -361,7 +362,7 @@ export async function downloadTopNLatestWithNaming(
       targetMenuItem.click();
       
       downloadedCount++;
-      await randomSleep(1500, 2500); // Give browser time to dispatch native download before moving to next item
+      await randomSleep(TIMING.BETWEEN_DOWNLOADS_MIN, TIMING.BETWEEN_DOWNLOADS_MAX);
     } else {
         console.warn(`[FlowAuto] ⚠️ 最终未能找到任何可用的下载菜单项。`);
     }

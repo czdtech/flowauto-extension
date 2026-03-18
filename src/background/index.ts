@@ -50,6 +50,9 @@ import {
 import { expectDownload, initDownloadManager } from "./download-manager";
 import { kickRunner } from "./runner";
 import { tryInjectContentScripts } from "./content-injection";
+import { sendMessageToTab } from "../shared/messaging";
+import { TIMEOUTS } from "../shared/config";
+import { logger } from "../shared/logger";
 
 initDownloadManager();
 
@@ -114,33 +117,6 @@ function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   });
 }
 
-function sendMessageToTab<TReq extends AnyRequest, TRes extends AnyResponse>(
-  tabId: number,
-  message: TReq,
-  timeoutMs = 1500,
-): Promise<TRes> {
-  return new Promise((resolve, reject) => {
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      reject(new Error("timeout"));
-    }, timeoutMs);
-
-    chrome.tabs.sendMessage(tabId, message, (response) => {
-      const err = chrome.runtime.lastError;
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(response as TRes);
-    });
-  });
-}
-
 async function resetExecutionSessionOnActiveTab(): Promise<void> {
   const tab = await getActiveTab();
   const tabId = tab?.id;
@@ -163,12 +139,10 @@ async function resetExecutionSessionOnActiveTab(): Promise<void> {
       2500,
     );
     if (!res.ok) {
-      console.warn(
-        "[FlowAuto] 清空历史后重置执行会话失败（content返回ok=false）",
-      );
+      logger.warn("清空历史后重置执行会话失败（content返回ok=false）");
     }
   } catch (e) {
-    console.warn("[FlowAuto] 清空历史后重置执行会话失败:", e);
+    logger.warn("清空历史后重置执行会话失败", e);
   }
 }
 

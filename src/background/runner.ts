@@ -10,6 +10,9 @@ import {
   setRunning,
 } from './queue-engine';
 import { tryInjectContentScripts } from './content-injection';
+import { sendMessageToTab } from '../shared/messaging';
+import { TIMEOUTS } from '../shared/config';
+import { logger } from '../shared/logger';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -53,29 +56,6 @@ function getTabById(tabId: number): Promise<chrome.tabs.Tab | undefined> {
       } else {
         resolve(tab);
       }
-    });
-  });
-}
-
-function sendMessageToTab<TReq, TRes>(tabId: number, message: TReq, timeoutMs: number): Promise<TRes> {
-  return new Promise((resolve, reject) => {
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      reject(new Error('timeout'));
-    }, timeoutMs);
-
-    chrome.tabs.sendMessage(tabId, message as any, (response) => {
-      const err = chrome.runtime.lastError;
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(response as TRes);
     });
   });
 }
