@@ -1,5 +1,5 @@
 import { MSG } from '../../shared/constants';
-import { TIMING } from '../../shared/config';
+import { TIMING, DOWNLOAD } from '../../shared/config';
 import { isVisible, randomSleep } from '../utils/dom';
 import { querySelectorAllDeep } from '../finders';
 import type { TaskItem } from '../../shared/types';
@@ -12,16 +12,14 @@ export interface DownloadNamingHint {
   outputIndex: number;
 }
 
-const MIN_RESULT_PX = 80;
-
 function isLikelyResultThumbnail(img: HTMLImageElement): boolean {
   const nw = img.naturalWidth || 0;
   const nh = img.naturalHeight || 0;
-  if (nw >= MIN_RESULT_PX && nh >= MIN_RESULT_PX) return true;
+  if (nw >= DOWNLOAD.MIN_RESULT_DIMENSION_PX && nh >= DOWNLOAD.MIN_RESULT_DIMENSION_PX) return true;
 
   const w = img.clientWidth || img.width || 0;
   const h = img.clientHeight || img.height || 0;
-  return w >= MIN_RESULT_PX && h >= MIN_RESULT_PX;
+  return w >= DOWNLOAD.MIN_RESULT_DIMENSION_PX && h >= DOWNLOAD.MIN_RESULT_DIMENSION_PX;
 }
 
 function getTrackableUrl(img: HTMLImageElement): string | null {

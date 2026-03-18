@@ -1,5 +1,6 @@
 import { MSG } from "../../shared/constants";
-import { TIMING } from "../../shared/config";
+import { TIMING, TIMEOUTS, LIMITS } from "../../shared/config";
+import { taskLog, logger } from "../../shared/logger";
 import type {
   RefMediaLookupRequest,
   RefMediaLookupResponse,
@@ -44,34 +45,7 @@ function mediaTypeForTask(task: TaskItem): "image" | "video" {
 }
 
 function timeoutForTask(task: TaskItem): number {
-  return task.mode === "create-image" ? 120_000 : 900_000;
-}
-
-function taskLog(
-  taskId: string,
-  msg: string,
-  options?: { toUi?: boolean; toConsole?: boolean },
-): void {
-  const toUi = options?.toUi ?? true;
-  const toConsole = options?.toConsole ?? true;
-  if (toConsole) console.log(`[FlowAuto] ${msg}`);
-  if (!toUi) return;
-  try {
-    const maybe = chrome.runtime.sendMessage({
-      type: MSG.TASK_LOG,
-      taskId,
-      msg,
-    } as any);
-    // In MV3 this may return a Promise; avoid "Uncaught (in promise)" noise.
-    if (maybe && typeof (maybe as any).catch === "function")
-      (maybe as any).catch(() => {});
-  } catch {
-    /* best effort */
-  }
-}
-
-function taskDebug(msg: string): void {
-  console.log(`[FlowAuto][debug] ${msg}`);
+  return task.mode === "create-image" ? TIMEOUTS.GENERATION_IMAGE : TIMEOUTS.GENERATION_VIDEO;
 }
 
 /**
@@ -279,7 +253,7 @@ export async function executeTask(
         const sessionUuid = uploadedMediaByHash.get(assetHash);
         const existingUuid = persistedUuid ?? sessionUuid;
 
-        taskDebug(
+        logger.debug(
           `参考图 ${i + 1}/${task.assets.length}: ${asset.filename}${existingUuid ? `（复用UUID=${existingUuid.substring(0, 8)}…）` : "（上传）"} hash=${assetHash.slice(0, 10)}…`,
         );
 
@@ -314,7 +288,7 @@ export async function executeTask(
         }
       } catch (e: any) {
         const msg = typeof e?.message === "string" ? e.message : String(e);
-        taskDebug(`参考图失败: ${asset.filename} — ${msg}`);
+        logger.debug(`参考图失败: ${asset.filename} — ${msg}`);
         log(`参考图处理失败：${asset.filename}`);
         throw new Error(`参考图注入失败 (${asset.filename}): ${msg}`);
       }
@@ -335,7 +309,6 @@ export async function executeTask(
   const projectName = getProjectName() ?? "Flow";
   const dir = buildProjectDir(projectName);
 
-  const MAX_GENERATION_ATTEMPTS = 3;
   let downloadedTotal = 0;
   let remaining = task.outputCount;
   let attempt = 0;
@@ -343,12 +316,12 @@ export async function executeTask(
   // detect images that loaded late (after the first round's Signal C).
   let originalBaseline: Set<string> | null = null;
 
-  while (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
+  while (remaining > 0 && attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
     attempt++;
     log(
       attempt === 1
         ? "开始生成"
-        : `开始重试生成（第 ${attempt}/${MAX_GENERATION_ATTEMPTS} 次）`,
+        : `开始重试生成（第 ${attempt}/${LIMITS.MAX_GENERATION_ATTEMPTS} 次）`,
     );
 
     // Before retrying, check if late-arriving images already cover the gap.
@@ -410,7 +383,7 @@ export async function executeTask(
             document.execCommand("insertText", false, " ");
           }
         }
-        await randomSleep(400, 800);
+        await randomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX);
       } catch (e) {
         console.warn("[FlowAuto] 重试前唤醒输入框失败:", e);
       }
@@ -426,9 +399,9 @@ export async function executeTask(
     } catch (e: any) {
       const msg = typeof e?.message === "string" ? e.message : String(e);
       console.warn(`[FlowAuto] 生成异常(第${attempt}次): ${msg}`);
-      if (attempt < MAX_GENERATION_ATTEMPTS) {
+      if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`生成异常，准备重试（还差 ${remaining}）`);
-        await randomSleep(1000, 1800);
+        await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
         continue;
       }
       throw new Error(`生成失败: ${msg}`);
@@ -440,9 +413,9 @@ export async function executeTask(
 
     const produced = round.newCount;
     if (produced <= 0) {
-      if (attempt < MAX_GENERATION_ATTEMPTS) {
+      if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`本轮未产出结果，准备重试（还差 ${remaining}）`);
-        await randomSleep(1000, 1800);
+        await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
         continue;
       }
       throw new Error("生成失败（无新产出）");
@@ -474,9 +447,9 @@ export async function executeTask(
     downloadedTotal += roundCount;
     remaining = Math.max(0, task.outputCount - downloadedTotal);
 
-    if (remaining > 0 && attempt < MAX_GENERATION_ATTEMPTS) {
+    if (remaining > 0 && attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
       log(`结果不足，自动补生成（剩余 ${remaining}）`);
-      await randomSleep(1000, 1800);
+      await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
     }
   }
 

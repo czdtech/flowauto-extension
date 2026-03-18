@@ -1,12 +1,11 @@
 import { findCreateButton, findPromptInput } from "../finders";
 import { forceClick, randomSleep, waitFor } from "../utils/dom";
+import { DOWNLOAD } from "../../shared/config";
 
 export interface GenerationWaitResult {
   newCount: number;
   baselineUrls: Set<string>;
 }
-
-const MIN_RESULT_PX = 80;
 
 function getTrackableImgUrl(img: HTMLImageElement): string | null {
   const src = img.currentSrc || img.src;
@@ -19,11 +18,11 @@ function isLikelyResultImage(img: HTMLImageElement): boolean {
   // Prefer natural size (no layout), fall back to rendered size.
   const nw = img.naturalWidth || 0;
   const nh = img.naturalHeight || 0;
-  if (nw >= MIN_RESULT_PX && nh >= MIN_RESULT_PX) return true;
+  if (nw >= DOWNLOAD.MIN_RESULT_DIMENSION_PX && nh >= DOWNLOAD.MIN_RESULT_DIMENSION_PX) return true;
 
   const w = img.clientWidth || img.width || 0;
   const h = img.clientHeight || img.height || 0;
-  return w >= MIN_RESULT_PX && h >= MIN_RESULT_PX;
+  return w >= DOWNLOAD.MIN_RESULT_DIMENSION_PX && h >= DOWNLOAD.MIN_RESULT_DIMENSION_PX;
 }
 
 /**
