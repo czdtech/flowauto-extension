@@ -12,7 +12,6 @@ import {
 import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
 import { TIMEOUTS } from '../shared/config';
-import { logger } from '../shared/logger';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -108,7 +107,7 @@ async function runLoop(): Promise<void> {
       const res = await sendMessageToTab<ExecuteTaskRequest, TaskResultResponse>(
         tab.id,
         { type: MSG.EXECUTE_TASK, task: next },
-        30 * 60 * 1000
+        TIMEOUTS.TASK_EXECUTION
       );
 
       if (res.ok) {

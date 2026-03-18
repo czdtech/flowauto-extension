@@ -34,6 +34,18 @@ export const TIMING = {
   /** Delay for URL fallback downloads (1200-2000ms) */
   URL_DOWNLOAD_MIN: 1200,
   URL_DOWNLOAD_MAX: 2000,
+
+  /** Delay between retry attempts in generation loop (1000-1800ms) */
+  RETRY_PAUSE_MIN: 1000,
+  RETRY_PAUSE_MAX: 1800,
+
+  /** Short pause after non-critical UI actions (400-800ms) */
+  UI_SETTLE_MIN: 400,
+  UI_SETTLE_MAX: 800,
+
+  /** Generation poll interval (3000-4000ms) */
+  GENERATION_POLL_MIN: 3000,
+  GENERATION_POLL_MAX: 4000,
 } as const;
 
 // ============================================
@@ -79,6 +91,10 @@ export const LIMITS = {
 
   /** Polling interval for task status checks (ms) */
   STATUS_POLL_INTERVAL: 2500,
+
+  /** Consecutive stable polls required before declaring generation complete */
+  STABLE_POLLS_REQUIRED: 3,
+  PARTIAL_STABLE_POLLS_REQUIRED: 5,
 } as const;
 
 // ============================================

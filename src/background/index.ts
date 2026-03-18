@@ -385,7 +385,7 @@ async function handleExpectDownload(
 
 function waitForDownloadComplete(
   downloadId: number,
-  timeoutMs = 120_000,
+  timeoutMs = TIMEOUTS.DOWNLOAD_COMPLETE,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const start = Date.now();
