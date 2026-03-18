@@ -23,7 +23,7 @@
 import { querySelectorAllDeep } from "../finders";
 import { getElementName, normalizeForMatch } from "../utils/aria";
 import { forceClick, isVisible, randomSleep, sleep, waitFor } from "../utils/dom";
-import { logger } from "../../shared/logger";
+import { logger, errorMsg } from "../../shared/logger";
 
 // ---------------------------------------------------------------------------
 // DOM finders
@@ -480,8 +480,8 @@ async function trySelectFromResourcePanel(
       `从资源面板选择成功: ${filename}${attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
     );
     return true;
-  } catch (e: any) {
-    logger.warn(`资源面板选择失败: ${e?.message ?? e}`);
+  } catch (e: unknown) {
+    logger.warn(`资源面板选择失败: ${errorMsg(e)}`);
     await closeResourcePanel().catch(() => {});
     return false;
   }
@@ -1035,8 +1035,8 @@ export async function injectImageToFlow(
       if (await trySelectFromResourcePanel(filename)) {
         return { success: true, mediaUuid: options.mediaUuid };
       }
-    } catch (e: any) {
-      logger.warn(`资源面板选择异常: ${e?.message ?? e}`);
+    } catch (e: unknown) {
+      logger.warn(`资源面板选择异常: ${errorMsg(e)}`);
     }
   }
 
@@ -1054,8 +1054,8 @@ export async function injectImageToFlow(
       }
       return { success: true, mediaUuid: newUuid };
     }
-  } catch (e: any) {
-    logger.warn(`剪贴板粘贴失败: ${e?.message ?? e}`);
+  } catch (e: unknown) {
+    logger.warn(`剪贴板粘贴失败: ${errorMsg(e)}`);
   }
 
   // ── Fallback: Resource panel + file-input interception ─────────────
@@ -1093,8 +1093,8 @@ export async function injectImageToFlow(
     disarm();
     logger.warn("回退: input.click() 未被触发");
     await closeResourcePanel().catch(() => {});
-  } catch (e: any) {
-    logger.warn(`回退失败: ${e?.message ?? e}`);
+  } catch (e: unknown) {
+    logger.warn(`回退失败: ${errorMsg(e)}`);
     await closeResourcePanel().catch(() => {});
   }
 
@@ -1110,8 +1110,8 @@ export async function injectImageToFlow(
       );
       return { success: true, mediaUuid: newUuid };
     }
-  } catch (e: any) {
-    logger.warn(`拖放失败: ${e?.message ?? e}`);
+  } catch (e: unknown) {
+    logger.warn(`拖放失败: ${errorMsg(e)}`);
   }
 
   throw new Error(`所有图片注入策略均失败 (${filename})`);

@@ -1,6 +1,6 @@
 import { MSG } from "../../shared/constants";
 import { TIMING, TIMEOUTS, LIMITS } from "../../shared/config";
-import { taskLog, logger } from "../../shared/logger";
+import { taskLog, logger, errorMsg } from "../../shared/logger";
 import type {
   RefMediaLookupRequest,
   RefMediaLookupResponse,
@@ -286,8 +286,8 @@ export async function executeTask(
             uploadedCount++;
           }
         }
-      } catch (e: any) {
-        const msg = typeof e?.message === "string" ? e.message : String(e);
+      } catch (e: unknown) {
+        const msg = errorMsg(e);
         logger.debug(`参考图失败: ${asset.filename} — ${msg}`);
         log(`参考图处理失败：${asset.filename}`);
         throw new Error(`参考图注入失败 (${asset.filename}): ${msg}`);
@@ -396,8 +396,8 @@ export async function executeTask(
         expectedCount: remaining,
         timeoutMs: timeoutForTask(task),
       });
-    } catch (e: any) {
-      const msg = typeof e?.message === "string" ? e.message : String(e);
+    } catch (e: unknown) {
+      const msg = errorMsg(e);
       logger.warn(`生成异常(第${attempt}次): ${msg}`);
       if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`生成异常，准备重试（还差 ${remaining}）`);

@@ -60,6 +60,13 @@ export const logger = {
   },
 };
 
+/** Extract a human-readable message from an unknown caught value. */
+export function errorMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  return String(e);
+}
+
 /** Send a log line to the background for UI display. */
 export function taskLog(taskId: string, msg: string): void {
   logger.forTask(taskId).info(msg);

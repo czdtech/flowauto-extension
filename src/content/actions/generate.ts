@@ -1,6 +1,6 @@
 import { findCreateButton, findPromptInput } from "../finders";
 import { forceClick, randomSleep, waitFor } from "../utils/dom";
-import { DOWNLOAD } from "../../shared/config";
+import { DOWNLOAD, TIMING, LIMITS } from "../../shared/config";
 import { logger } from "../../shared/logger";
 
 export interface GenerationWaitResult {
@@ -71,7 +71,7 @@ export async function clickCreate(): Promise<void> {
           document.execCommand("insertText", false, " ");
         }
       }
-      await randomSleep(400, 800);
+      await randomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX);
     } catch (e) {
       logger.warn("唤醒按钮失败:", e);
     }
@@ -109,10 +109,10 @@ export async function waitForGenerationComplete(
   );
 
   // Give the request time to reach Flow's server.
-  await randomSleep(3000, 4000);
+  await randomSleep(TIMING.GENERATION_POLL_MIN, TIMING.GENERATION_POLL_MAX);
 
-  const STABLE_REQUIRED = 3; // 3 consecutive unchanged polls = ~6 s stable
-  const PARTIAL_STABLE_REQUIRED = 5; // partial results stable for ~10 s
+  const STABLE_REQUIRED = LIMITS.STABLE_POLLS_REQUIRED;
+  const PARTIAL_STABLE_REQUIRED = LIMITS.PARTIAL_STABLE_POLLS_REQUIRED;
   let stableCount = 0;
   let lastNewCount = -1;
   let noLoadingStableCount = 0;
@@ -395,7 +395,7 @@ export async function waitForGenerationComplete(
   }
 
   // Brief stabilization before download.
-  await randomSleep(1200, 2000);
+  await randomSleep(TIMING.URL_DOWNLOAD_MIN, TIMING.URL_DOWNLOAD_MAX);
 
   // Final resync for accurate logging + downstream baseline filtering.
   const finalUrls = collectResultImageSrcs();
@@ -415,7 +415,7 @@ export async function createAndWaitForGeneration(options: {
   timeoutMs: number;
 }): Promise<GenerationWaitResult> {
   await clickCreate();
-  await randomSleep(400, 800);
+  await randomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX);
   return await waitForGenerationComplete(
     options.expectedCount,
     options.timeoutMs,

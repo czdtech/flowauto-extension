@@ -1,6 +1,7 @@
 import { MSG } from '../shared/constants';
 import type { ExecuteTaskRequest, TaskResultResponse } from '../shared/protocol';
 import { sleep } from '../shared/sleep';
+import { errorMsg } from '../shared/logger';
 import {
   getAppState,
   getNextWaitingTask,
@@ -115,8 +116,8 @@ async function runLoop(): Promise<void> {
       } else {
         await markTaskError(next.id, res.error ?? '执行失败（未知错误）');
       }
-    } catch (e: any) {
-      const msg = typeof e?.message === 'string' ? e.message : String(e);
+    } catch (e: unknown) {
+      const msg = errorMsg(e);
       await markTaskError(next.id, msg);
     }
 
