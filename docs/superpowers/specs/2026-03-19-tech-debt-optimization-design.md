@@ -19,15 +19,15 @@ A prior refactoring session created `config.ts`, `logger.ts`, `messaging.ts`, an
 - Keep public API unchanged: `logger.debug/info/warn/error` + `logger.forTask()`
 
 ### 1.2 Clean Unused Imports
-- `background/index.ts`: remove unused `TIMEOUTS` import; use `logger` to replace bare `console.*`
-- `background/runner.ts`: replace hardcoded `30 * 60 * 1000` (line 111) with `TIMEOUTS.TASK_EXECUTION`; use `logger`
+- `background/index.ts`: remove unused `TIMEOUTS` import (logger already in use, no bare console calls)
+- `background/runner.ts`: replace hardcoded `30 * 60 * 1000` (line 111) with `TIMEOUTS.TASK_EXECUTION`; remove unused `logger` import (no console calls to replace — logger usage will come in Phase 3.2 if needed)
 
 ### 1.3 Complete Constant Migration
 **execute-task.ts:**
 - Line 338 `MAX_GENERATION_ATTEMPTS = 3` → `LIMITS.MAX_GENERATION_ATTEMPTS`
 - Line 47 timeout values → `TIMEOUTS.GENERATION_IMAGE` / `TIMEOUTS.GENERATION_VIDEO`
-- Lines 413/431/445/479 hardcoded `randomSleep` → add `TIMING.RETRY_PAUSE` etc.
-- Remove duplicate local `taskLog()` function, use shared logger
+- Lines 413/431/445/479 hardcoded `randomSleep` → add new `TIMING.RETRY_PAUSE` and `TIMING.RETRY_WAKE` constants to `config.ts`, then use them
+- Remove duplicate local `taskLog()` function (lines 50-71), replace with shared logger's `taskLog` — note: shared `taskLog` in logger.ts currently uses broken `require()`, must be rewritten to use ESM import of `MSG` from constants.ts
 
 **download.ts:**
 - Line 15 `MIN_RESULT_PX = 80` → `DOWNLOAD.MIN_RESULT_DIMENSION_PX`
@@ -114,8 +114,26 @@ A prior refactoring session created `config.ts`, `logger.ts`, `messaging.ts`, an
 - `src/background/queue-engine.ts`
 - `package.json` (add vitest dev dependency)
 
+## Explicitly Deferred
+
+### Large File Decomposition (Report 4.5, P1)
+`execute-task.ts` (490 lines) and `download.ts` (372 lines) are flagged as too large. **Deferred** because:
+- `App.svelte` split is already done (reduced from 1259 to ~650 lines)
+- Both files are internally cohesive — each does one job (task orchestration / download strategies)
+- Splitting them would create more inter-module coupling without clear benefit at this scale
+- The constant migration and logger integration in this spec already improve their maintainability
+
+### Race Condition in queue-engine.ts (Report 4.7)
+**Deferred** because:
+- JS is single-threaded; true data races don't occur
+- Async interleaving on shared `queue` state is theoretically possible but hasn't manifested as a bug
+- Introducing a state lock adds complexity without demonstrated need
+- If issues arise, the improved logging from this spec will make them visible
+
 ## Risks
 
 1. **logger.ts rewrite** may break callers if public API changes — mitigated by keeping same interface
-2. **Selector consolidation** needs careful grep to find all inline selectors
-3. **Chrome API type declarations** may be incomplete — use `@ts-expect-error` as escape hatch
+2. **Shared `taskLog` uses broken `require()`** — must rewrite to ESM import; the local duplicate in execute-task.ts serves as reference for correct behavior
+3. **~130 bare `console.*` calls across content scripts** — Phase 3.2 is a large mechanical change; mitigated by search-and-replace with manual review
+4. **Selector consolidation** needs careful grep to find all inline selectors
+5. **Chrome `sidePanel` API lacks complete types** in `@types/chrome` — `chrome-types.d.ts` may need explicit method signatures; use `@ts-expect-error` as escape hatch
