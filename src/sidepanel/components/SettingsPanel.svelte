@@ -34,7 +34,7 @@ rc/sidepanel/components/SettingsPanel.svelte</path>
         <select
           class="sel"
           bind:value={s_defaultGenerationType}
-          onchange={(e) => patchSettings({ defaultGenerationType: (e.target as HTMLSelectElement).value as any })}
+          onchange={(e) => patchSettings({ defaultGenerationType: (e.target as HTMLSelectElement).value as UserSettings['defaultGenerationType'] })}
         >
           <option value="text-to-image">文生图</option>
           <option value="image-to-image">图生图</option>
@@ -48,7 +48,7 @@ rc/sidepanel/components/SettingsPanel.svelte</path>
         <select
           class="sel"
           bind:value={s_defaultAspectRatio}
-          onchange={(e) => patchSettings({ defaultAspectRatio: (e.target as HTMLSelectElement).value as any })}
+          onchange={(e) => patchSettings({ defaultAspectRatio: (e.target as HTMLSelectElement).value as UserSettings['defaultAspectRatio'] })}
         >
           <option value="9:16">9:16</option>
           <option value="16:9">16:9</option>
@@ -74,7 +74,7 @@ rc/sidepanel/components/SettingsPanel.svelte</path>
         <select
           class="sel"
           bind:value={s_defaultModel}
-          onchange={(e) => patchSettings({ defaultModel: (e.target as HTMLSelectElement).value as any })}
+          onchange={(e) => patchSettings({ defaultModel: (e.target as HTMLSelectElement).value as UserSettings['defaultModel'] })}
         >
           <optgroup label="图像生成">
             <option value="nano-banana-pro">Nano Banana Pro</option>
@@ -93,7 +93,7 @@ rc/sidepanel/components/SettingsPanel.svelte</path>
         <select
           class="sel"
           bind:value={s_defaultDownloadResolution}
-          onchange={(e) => patchSettings({ defaultDownloadResolution: (e.target as HTMLSelectElement).value as any })}
+          onchange={(e) => patchSettings({ defaultDownloadResolution: (e.target as HTMLSelectElement).value as UserSettings['defaultDownloadResolution'] })}
         >
           <option value="1K/720p">1K / 720p</option>
           <option value="2K/1080p">2K / 1080p</option>

@@ -1,6 +1,6 @@
 function getContentScriptFilesFromManifest(): string[] {
-  const manifest = chrome.runtime.getManifest() as any;
-  const entries = (manifest?.content_scripts ?? []) as any[];
+  const manifest = chrome.runtime.getManifest();
+  const entries = manifest.content_scripts ?? [];
   const files: string[] = [];
 
   for (const e of entries) {

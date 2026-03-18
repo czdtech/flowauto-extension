@@ -140,7 +140,7 @@ function isSelectedState(el: HTMLElement | null): boolean {
   ) {
     return true;
   }
-  const classText = String((el as any).className || "").toLowerCase();
+  const classText = String(el.className || "").toLowerCase();
   if (
     classText.includes("selected") ||
     classText.includes("active") ||
@@ -642,7 +642,7 @@ function armFileInputInterception(
     // Clean up all overrides on armed inputs that weren't triggered
     for (const inp of armed) {
       try {
-        delete (inp as any).click;
+        delete (inp as Omit<HTMLInputElement, 'click'> & { click?: () => void }).click;
       } catch {
         /* ok */
       }
@@ -666,7 +666,7 @@ function armFileInputInterception(
       this.files = dt.files;
 
       // Remove the override first so the change handler sees a clean element
-      delete (this as any).click;
+      delete (this as Omit<HTMLInputElement, 'click'> & { click?: () => void }).click;
 
       this.dispatchEvent(new Event("change", { bubbles: true }));
 
@@ -676,7 +676,7 @@ function armFileInputInterception(
           k.startsWith("__reactProps"),
         );
         if (rKey) {
-          const props = (this as any)[rKey];
+          const props = (this as HTMLInputElement & Record<string, unknown>)[rKey] as { onChange?: (e: unknown) => void } | undefined;
           if (typeof props?.onChange === "function") {
             props.onChange({ target: this, currentTarget: this });
           }

@@ -60,18 +60,14 @@ function initSidePanelBehavior(): void {
   // Chrome side panel behavior is opt-in; without this, clicking the extension action may do nothing.
   try {
     if (!chrome.sidePanel?.setPanelBehavior) return;
-    const maybe = chrome.sidePanel.setPanelBehavior({
+    chrome.sidePanel.setPanelBehavior({
       openPanelOnActionClick: true,
-    } as any);
-    if (maybe && typeof (maybe as any).catch === "function")
-      (maybe as any).catch(() => {});
+    }).catch(() => {});
 
     // Globally disable the side panel so it does NOT follow the user across tabs.
     // We enable it on a per-tab basis when the user clicks the extension action.
     if (chrome.sidePanel.setOptions) {
-      const opt = chrome.sidePanel.setOptions({ enabled: false } as any);
-      if (opt && typeof (opt as any).catch === "function")
-        (opt as any).catch(() => {});
+      chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
     }
   } catch {
     // ignore
@@ -92,18 +88,14 @@ chrome.action.onClicked.addListener((tab) => {
     // Enable the side panel ONLY for this specific tab.
     // The global default is disabled, so switching to another tab will hide the panel.
     if (chrome.sidePanel.setOptions) {
-      const maybe = chrome.sidePanel.setOptions({
+      chrome.sidePanel.setOptions({
         tabId: tab.id,
         path: "sidepanel/index.html",
         enabled: true,
-      } as any);
-      if (maybe && typeof (maybe as any).catch === "function")
-        (maybe as any).catch(() => {});
+      }).catch(() => {});
     }
 
-    const maybe = chrome.sidePanel.open({ tabId: tab.id } as any);
-    if (maybe && typeof (maybe as any).catch === "function")
-      (maybe as any).catch(() => {});
+    chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
   } catch {
     // ignore
   }
@@ -185,8 +177,8 @@ async function handlePing(_req: PingRequest): Promise<PongResponse> {
       url: res.url ?? url,
       title: res.title ?? tab.title,
     };
-  } catch (e: any) {
-    const message = typeof e?.message === "string" ? e.message : "";
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "";
     if (message.includes("timeout")) {
       return {
         type: MSG.PONG,

@@ -17,8 +17,9 @@ export async function setPromptText(prompt: string): Promise<void> {
 
     // Verify
     const actual =
-      'value' in input ? String((input as any).value) :
-      input.isContentEditable ? (input.textContent || '') : '';
+      input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement
+        ? String(input.value)
+        : input.isContentEditable ? (input.textContent || '') : '';
 
     if (actual.includes(prompt.substring(0, 15))) {
       console.log(`[FlowAuto] ✅ Prompt 注入成功`);

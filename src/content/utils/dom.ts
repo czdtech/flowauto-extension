@@ -103,7 +103,8 @@ function tryReactNativeSetter(el: HTMLElement, value: string): boolean {
   }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const tracker = (el as any)._valueTracker;
+  // React internal: _valueTracker is injected by React on controlled inputs
+  const tracker = (el as HTMLInputElement & { _valueTracker?: { setValue(v: string): void } })._valueTracker;
   if (tracker && typeof tracker.setValue === 'function') {
     tracker.setValue('');
   }
@@ -199,14 +200,14 @@ function tryExecCommand(el: HTMLElement, value: string): boolean {
 function tryPerCharacterSimulation(el: HTMLElement, value: string): boolean {
   if (!('value' in el)) return false;
   el.focus();
-  (el as any).value = '';
+  (el as HTMLInputElement).value = '';
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
     const keyOpts: KeyboardEventInit = {
       key: char, code: '', bubbles: true, cancelable: true, composed: true,
     };
     el.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
-    (el as any).value += char;
+    (el as HTMLInputElement).value += char;
     el.dispatchEvent(new InputEvent('input', {
       bubbles: true, cancelable: false, inputType: 'insertText', data: char,
     }));
@@ -218,8 +219,9 @@ function tryPerCharacterSimulation(el: HTMLElement, value: string): boolean {
 
 function verifyInjection(el: HTMLElement, value: string): boolean {
   const actual =
-    'value' in el ? String((el as any).value) :
-    el.isContentEditable ? (el.textContent || '') : '';
+    el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+      ? String(el.value)
+      : el.isContentEditable ? (el.textContent || '') : '';
   const snippet = value.substring(0, 20);
   if (!actual.includes(snippet)) return false;
 
@@ -259,7 +261,7 @@ export async function typeInputElement(el: HTMLElement, value: string): Promise<
   }
 
   // Unknown element type
-  (el as any).value = value;
+  (el as HTMLInputElement).value = value;
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
