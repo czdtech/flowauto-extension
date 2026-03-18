@@ -1,6 +1,7 @@
 import { KEYWORDS, SELECTORS } from "./selectors";
 import { getElementName, normalizeForMatch } from "./utils/aria";
 import { isVisible } from "./utils/dom";
+import { logger } from "../shared/logger";
 
 // ---------------------------------------------------------------------------
 // Shadow DOM aware querying
@@ -44,8 +45,8 @@ export function findPromptInput(): HTMLTextAreaElement | HTMLElement {
   for (const ta of textareas) {
     if ((ta.className || "").includes("recaptcha")) continue;
     if (!isVisible(ta)) continue;
-    console.log(
-      `[FlowAuto] findPromptInput: 找到 textarea, class="${ta.className.substring(0, 50)}", placeholder="${(ta.placeholder || "").substring(0, 50)}"`,
+    logger.debug(
+      `findPromptInput: 找到 textarea, class="${ta.className.substring(0, 50)}", placeholder="${(ta.placeholder || "").substring(0, 50)}"`,
     );
     return ta;
   }
@@ -56,8 +57,8 @@ export function findPromptInput(): HTMLTextAreaElement | HTMLElement {
   for (const tb of textboxes) {
     const name = normalizeForMatch(getElementName(tb));
     if (promptMatchers.some((k) => name.includes(k))) {
-      console.log(
-        `[FlowAuto] findPromptInput: 通过 ARIA 名称匹配找到 textbox: "${getElementName(tb)}"`,
+      logger.debug(
+        `findPromptInput: 通过 ARIA 名称匹配找到 textbox: "${getElementName(tb)}"`,
       );
       return tb;
     }
@@ -77,8 +78,8 @@ export function findPromptInput(): HTMLTextAreaElement | HTMLElement {
     // Heuristic: prompt inputs are typically larger than other editables
     const rect = ce.getBoundingClientRect();
     if (rect.width > 150) {
-      console.log(
-        `[FlowAuto] findPromptInput: 找到 contentEditable, tag=${ce.tagName}, aria="${ce.getAttribute("aria-label")}", size=${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      logger.debug(
+        `findPromptInput: 找到 contentEditable, tag=${ce.tagName}, aria="${ce.getAttribute("aria-label")}", size=${Math.round(rect.width)}x${Math.round(rect.height)}`,
       );
       return ce;
     }
@@ -91,8 +92,8 @@ export function findPromptInput(): HTMLTextAreaElement | HTMLElement {
   for (const tb of textboxes) {
     const name = normalizeForMatch(getElementName(tb));
     if (skipMatchers.some((k) => name.includes(k))) continue;
-    console.log(
-      `[FlowAuto] findPromptInput: 回退到第一个可见 textbox: "${getElementName(tb)}"`,
+    logger.debug(
+      `findPromptInput: 回退到第一个可见 textbox: "${getElementName(tb)}"`,
     );
     return tb;
   }
@@ -101,24 +102,24 @@ export function findPromptInput(): HTMLTextAreaElement | HTMLElement {
   for (const ce of editables) {
     const rect = ce.getBoundingClientRect();
     if (rect.width > 100 && rect.height > 30) {
-      console.log(
-        `[FlowAuto] findPromptInput: 最终回退到 contentEditable: tag=${ce.tagName}, size=${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      logger.debug(
+        `findPromptInput: 最终回退到 contentEditable: tag=${ce.tagName}, size=${Math.round(rect.width)}x${Math.round(rect.height)}`,
       );
       return ce;
     }
   }
 
   // Log all candidates for debugging
-  console.error(
-    `[FlowAuto] findPromptInput 失败! textareas=${textareas.length}, textboxes=${textboxes.length}, editables=${editables.length}`,
+  logger.error(
+    `findPromptInput 失败! textareas=${textareas.length}, textboxes=${textboxes.length}, editables=${editables.length}`,
   );
   textboxes.forEach((tb, i) => {
-    console.log(
+    logger.debug(
       `  textbox[${i}]: tag=${tb.tagName}, visible=${isVisible(tb)}, name="${getElementName(tb).substring(0, 60)}"`,
     );
   });
   editables.forEach((ce, i) => {
-    console.log(
+    logger.debug(
       `  editable[${i}]: tag=${ce.tagName}, visible=${isVisible(ce)}, role="${ce.getAttribute("role")}", name="${getElementName(ce).substring(0, 60)}"`,
     );
   });
@@ -143,8 +144,8 @@ export function findCreateButton(): HTMLButtonElement {
   for (const b of submitBtns) {
     const name = normalizeForMatch(getElementName(b));
     if (matchers.some((k) => name.includes(k))) {
-      console.log(
-        `[FlowAuto] findCreateButton: 通过 type="submit" + 文本匹配: "${getElementName(b).substring(0, 40)}", disabled=${b.disabled}, aria-disabled=${b.getAttribute("aria-disabled")}`,
+      logger.debug(
+        `findCreateButton: 通过 type="submit" + 文本匹配: "${getElementName(b).substring(0, 40)}", disabled=${b.disabled}, aria-disabled=${b.getAttribute("aria-disabled")}`,
       );
       return b;
     }
@@ -156,8 +157,8 @@ export function findCreateButton(): HTMLButtonElement {
     if (b.hasAttribute("aria-expanded")) continue;
     const name = normalizeForMatch(getElementName(b));
     if (matchers.some((k) => name.includes(k))) {
-      console.log(
-        `[FlowAuto] findCreateButton: 找到创建按钮, disabled=${b.disabled}, text="${getElementName(b).substring(0, 40)}"`,
+      logger.debug(
+        `findCreateButton: 找到创建按钮, disabled=${b.disabled}, text="${getElementName(b).substring(0, 40)}"`,
       );
       return b;
     }
@@ -170,26 +171,26 @@ export function findCreateButton(): HTMLButtonElement {
     const text = normalizeForMatch(b.textContent || "");
     // Material icon names like "add", "send", "create"
     if (text.includes("send") || text.includes("add_circle")) {
-      console.log(
-        `[FlowAuto] findCreateButton: 通过 Material Icon 找到按钮: "${(b.textContent || "").trim().substring(0, 40)}"`,
+      logger.debug(
+        `findCreateButton: 通过 Material Icon 找到按钮: "${(b.textContent || "").trim().substring(0, 40)}"`,
       );
       return b;
     }
   }
 
   // Log debugging info
-  console.error(`[FlowAuto] findCreateButton 失败!`);
+  logger.error(`findCreateButton 失败!`);
   let count = 0;
   for (const b of buttons) {
     if (!isVisible(b)) continue;
     count++;
     if (count <= 15) {
-      console.log(
+      logger.debug(
         `  button[${count}]: text="${getElementName(b).substring(0, 60)}", disabled=${b.disabled}, expanded=${b.getAttribute("aria-expanded")}`,
       );
     }
   }
-  console.log(`  总可见按钮: ${count}`);
+  logger.debug(`  总可见按钮: ${count}`);
 
   throw new Error("未找到创建按钮 (Create button not found)");
 }
@@ -228,14 +229,14 @@ export function findSettingsToggle(): HTMLButtonElement | null {
       name.includes("9:16") ||
       name.includes("crop")
     ) {
-      console.log(
-        `[FlowAuto] findSettingsToggle: 通过模型/画幅关键词找到: "${getElementName(b).substring(0, 60)}"`,
+      logger.debug(
+        `findSettingsToggle: 通过模型/画幅关键词找到: "${getElementName(b).substring(0, 60)}"`,
       );
       return b;
     }
   }
 
-  console.warn(`[FlowAuto] findSettingsToggle: 未找到设置面板切换按钮`);
+  logger.warn(`findSettingsToggle: 未找到设置面板切换按钮`);
   return null;
 }
 
@@ -267,15 +268,15 @@ export function findModelDropdown(): HTMLButtonElement | null {
         name.includes("veo") ||
         name.includes("model")
       ) {
-        console.log(
-          `[FlowAuto] findModelDropdown: 通过 aria-haspopup 找到: "${getElementName(b).substring(0, 60)}"`,
+        logger.debug(
+          `findModelDropdown: 通过 aria-haspopup 找到: "${getElementName(b).substring(0, 60)}"`,
         );
         return b;
       }
     }
   }
 
-  console.warn(`[FlowAuto] findModelDropdown: 未找到模型下拉按钮`);
+  logger.warn(`findModelDropdown: 未找到模型下拉按钮`);
   return null;
 }
 

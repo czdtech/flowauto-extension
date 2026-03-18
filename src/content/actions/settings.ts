@@ -1,4 +1,5 @@
 import type { AspectRatio, GenerationMode, TaskItem } from "../../shared/types";
+import { logger } from "../../shared/logger";
 import { KEYWORDS } from "../selectors";
 import { findModelDropdown, findSettingsToggle } from "../finders";
 import { getElementName, normalizeForMatch } from "../utils/aria";
@@ -28,13 +29,13 @@ export async function openSettingsPanel(): Promise<void> {
       debugName: "findSettingsToggle",
     });
   } catch (e) {
-    console.warn("[FlowAuto] 未找到设置面板切换按钮，跳过");
+    logger.warn("未找到设置面板切换按钮，跳过");
     return;
   }
 
   if (toggle.getAttribute("aria-expanded") === "true") return;
 
-  console.log("[FlowAuto] 展开设置面板");
+  logger.debug("展开设置面板");
   forceClick(toggle);
   await waitFor(
     () => (toggle.getAttribute("aria-expanded") === "true" ? true : null),
@@ -101,8 +102,8 @@ export async function setMode(mode: GenerationMode): Promise<void> {
     try {
       await clickTabByKeywords(KEYWORDS.videoModeFrames);
     } catch {
-      console.log(
-        "[FlowAuto] Frames sub-tab not found; may already be default",
+      logger.debug(
+        "Frames sub-tab not found; may already be default",
       );
     }
     return;
@@ -113,8 +114,8 @@ export async function setMode(mode: GenerationMode): Promise<void> {
     return;
   }
 
-  console.warn(
-    `[FlowAuto] 模式 "${mode}" 在新 UI 中可能不再可用，跳过模式设置`,
+  logger.warn(
+    `模式 "${mode}" 在新 UI 中可能不再可用，跳过模式设置`,
   );
 }
 
@@ -269,7 +270,7 @@ export async function setModel(model: TaskItem["model"]): Promise<void> {
 
   const dropdown = findModelDropdown();
   if (!dropdown) {
-    console.warn("[FlowAuto] 未找到模型下拉按钮，跳过模型设置");
+    logger.warn("未找到模型下拉按钮，跳过模型设置");
     return;
   }
 
@@ -277,6 +278,6 @@ export async function setModel(model: TaskItem["model"]): Promise<void> {
   const desiredKeywords = modelOptionKeywords(model);
   if (keywordMatch(currentName, desiredKeywords)) return;
 
-  console.log(`[FlowAuto] 更改模型为: ${model}`);
+  logger.info(`更改模型为: ${model}`);
   await selectFromPopup(dropdown, desiredKeywords);
 }

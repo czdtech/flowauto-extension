@@ -56,8 +56,8 @@ function timeoutForTask(task: TaskItem): number {
 async function fetchAssetBlob(refId: string): Promise<Blob> {
   const cached = blobCache.get(refId);
   if (cached) {
-    console.log(
-      `[FlowAuto] fetchAssetBlob: ${refId} → ${cached.size} bytes (内存缓存)`,
+    logger.info(
+      `fetchAssetBlob: ${refId} → ${cached.size} bytes (内存缓存)`,
     );
     return cached;
   }
@@ -81,8 +81,8 @@ async function fetchAssetBlob(refId: string): Promise<Blob> {
         const blob = new Blob([bytes], {
           type: response.mimeType || "image/png",
         });
-        console.log(
-          `[FlowAuto] fetchAssetBlob: ${refId} → ${blob.size} bytes, ${blob.type}`,
+        logger.info(
+          `fetchAssetBlob: ${refId} → ${blob.size} bytes, ${blob.type}`,
         );
         blobCache.set(refId, blob);
         resolve(blob);
@@ -192,12 +192,12 @@ export async function resetExecutionSession(options?: {
   blobCache.clear();
   assetHashCache.clear();
   uploadedMediaByHash.clear();
-  console.log(
-    "[FlowAuto] 会话缓存已重置（blobCache / assetHashCache / uploadedMediaByHash）",
+  logger.info(
+    "会话缓存已重置（blobCache / assetHashCache / uploadedMediaByHash）",
   );
   if (options?.clearAttachedReferences !== false) {
     await clearAttachedReferences();
-    console.log("[FlowAuto] 已清理提示词区域参考图");
+    logger.info("已清理提示词区域参考图");
   }
 }
 
@@ -333,8 +333,8 @@ export async function executeTask(
       }
       if (totalNewSinceOriginal >= task.outputCount) {
         const lateArrivals = totalNewSinceOriginal - downloadedTotal;
-        console.log(
-          `[FlowAuto] 重试前检查: 原始基线后已有 ${totalNewSinceOriginal} 张新图（已下载 ${downloadedTotal}），无需再生成`,
+        logger.debug(
+          `重试前检查: 原始基线后已有 ${totalNewSinceOriginal} 张新图（已下载 ${downloadedTotal}），无需再生成`,
         );
         if (lateArrivals > 0) {
           const toDownload = Math.min(lateArrivals, remaining);
@@ -385,7 +385,7 @@ export async function executeTask(
         }
         await randomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX);
       } catch (e) {
-        console.warn("[FlowAuto] 重试前唤醒输入框失败:", e);
+        logger.warn("重试前唤醒输入框失败:", e);
       }
       await randomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX);
     }
@@ -398,7 +398,7 @@ export async function executeTask(
       });
     } catch (e: any) {
       const msg = typeof e?.message === "string" ? e.message : String(e);
-      console.warn(`[FlowAuto] 生成异常(第${attempt}次): ${msg}`);
+      logger.warn(`生成异常(第${attempt}次): ${msg}`);
       if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`生成异常，准备重试（还差 ${remaining}）`);
         await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);

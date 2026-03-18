@@ -1,6 +1,7 @@
 import { findCreateButton, findPromptInput } from "../finders";
 import { forceClick, randomSleep, waitFor } from "../utils/dom";
 import { DOWNLOAD } from "../../shared/config";
+import { logger } from "../../shared/logger";
 
 export interface GenerationWaitResult {
   newCount: number;
@@ -47,8 +48,8 @@ export async function clickCreate(): Promise<void> {
   const isDisabled =
     btn.disabled || btn.getAttribute("aria-disabled") === "true";
   if (isDisabled) {
-    console.log(
-      `[FlowAuto] 创建按钮处于禁用状态 (disabled=${btn.disabled}, aria-disabled=${btn.getAttribute("aria-disabled")})，尝试触发输入事件唤醒...`,
+    logger.debug(
+      `创建按钮处于禁用状态 (disabled=${btn.disabled}, aria-disabled=${btn.getAttribute("aria-disabled")})，尝试触发输入事件唤醒...`,
     );
     try {
       const input = findPromptInput();
@@ -72,11 +73,11 @@ export async function clickCreate(): Promise<void> {
       }
       await randomSleep(400, 800);
     } catch (e) {
-      console.warn("[FlowAuto] 唤醒按钮失败:", e);
+      logger.warn("唤醒按钮失败:", e);
     }
   }
   forceClick(btn);
-  console.log(`[FlowAuto] 点击了创建按钮`);
+  logger.info(`点击了创建按钮`);
 }
 
 /**
@@ -103,8 +104,8 @@ export async function waitForGenerationComplete(
   const pendingImgs = new Set<HTMLImageElement>();
   let observer: MutationObserver | null = null;
 
-  console.log(
-    `[FlowAuto] 等待生成完成: 基线图片URL数=${baselineUrls.size}, 期望新增=${expectedCount}, 超时=${timeoutMs}ms`,
+  logger.debug(
+    `等待生成完成: 基线图片URL数=${baselineUrls.size}, 期望新增=${expectedCount}, 超时=${timeoutMs}ms`,
   );
 
   // Give the request time to reach Flow's server.
@@ -179,8 +180,8 @@ export async function waitForGenerationComplete(
     ) {
       const rect = node.getBoundingClientRect();
       if (rect.width > 50 && rect.height > 50) {
-        console.error(
-          `[FlowAuto] ❌ 信号D(MutationObserver): 检测到新失败卡片: "${text.substring(0, 100)}"`,
+        logger.error(
+          `信号D(MutationObserver): 检测到新失败卡片: "${text.substring(0, 100)}"`,
         );
         generationError = `生成失败（内容策略）: ${text.substring(0, 100)}`;
         return;
@@ -196,8 +197,8 @@ export async function waitForGenerationComplete(
     ) {
       const rect = node.getBoundingClientRect();
       if (rect.width > 30 && rect.height > 10) {
-        console.error(
-          `[FlowAuto] ❌ 信号D(MutationObserver): 检测到提示词错误: "${text.substring(0, 100)}"`,
+        logger.error(
+          `信号D(MutationObserver): 检测到提示词错误: "${text.substring(0, 100)}"`,
         );
         generationError = `生成失败（提示词错误）: ${text.substring(0, 100)}`;
       }
@@ -314,11 +315,11 @@ export async function waitForGenerationComplete(
             btn.disabled || btn.getAttribute("aria-disabled") === "true";
           if (disabled) {
             buttonWasDisabled = true;
-            console.log(`[FlowAuto] 信号A: 创建按钮已变为 disabled`);
+            logger.debug(`信号A: 创建按钮已变为 disabled`);
           } else if (buttonWasDisabled) {
             // Button was disabled and is now re-enabled — generation complete
-            console.log(
-              `[FlowAuto] ✅ 信号A: 创建按钮从 disabled 恢复为可用，新图片URL: ${newCount}`,
+            logger.info(
+              `信号A: 创建按钮从 disabled 恢复为可用，新图片URL: ${newCount}`,
             );
             return true;
           }
@@ -335,8 +336,8 @@ export async function waitForGenerationComplete(
             lastNewCount = newCount;
           }
           if (stableCount >= STABLE_REQUIRED) {
-            console.log(
-              `[FlowAuto] ✅ 信号B: 新图片URL稳定在 ${newCount} 张，${STABLE_REQUIRED} 次轮询未变化，视为完成`,
+            logger.info(
+              `信号B: 新图片URL稳定在 ${newCount} 张，${STABLE_REQUIRED} 次轮询未变化，视为完成`,
             );
             return true;
           }
@@ -349,8 +350,8 @@ export async function waitForGenerationComplete(
         // For expectedCount > 1, avoid returning immediately on the first new image.
         if (!buttonWasDisabled && newCount > 0 && !hasLoadingIndicators()) {
           if (newCount >= expectedCount) {
-            console.log(
-              `[FlowAuto] ✅ 信号C: 无加载指示器 + 有新图片(${newCount}), 视为完成`,
+            logger.info(
+              `信号C: 无加载指示器 + 有新图片(${newCount}), 视为完成`,
             );
             return true;
           }
@@ -363,8 +364,8 @@ export async function waitForGenerationComplete(
           }
 
           if (noLoadingStableCount >= PARTIAL_STABLE_REQUIRED) {
-            console.warn(
-              `[FlowAuto] ⚠️ 信号C: 无加载且新增稳定在 ${newCount}/${expectedCount}，视为本轮结束`,
+            logger.warn(
+              `信号C: 无加载且新增稳定在 ${newCount}/${expectedCount}，视为本轮结束`,
             );
             return true;
           }
@@ -375,8 +376,8 @@ export async function waitForGenerationComplete(
 
         logTimer++;
         if (logTimer % 3 === 0) {
-          console.log(
-            `[FlowAuto] 生成中... 新图片: ${newCount}/${expectedCount}, 稳定: ${stableCount}/${STABLE_REQUIRED}`,
+          logger.debug(
+            `生成中... 新图片: ${newCount}/${expectedCount}, 稳定: ${stableCount}/${STABLE_REQUIRED}`,
           );
         }
 
@@ -402,8 +403,8 @@ export async function waitForGenerationComplete(
     if (!baselineUrls.has(u)) newUrls.add(u);
   }
   const actualNew = newUrls.size;
-  console.log(
-    `[FlowAuto] 生成完成！新增图片URL: ${actualNew} (基线: ${baselineUrls.size})`,
+  logger.info(
+    `生成完成！新增图片URL: ${actualNew} (基线: ${baselineUrls.size})`,
   );
 
   return { newCount: actualNew, baselineUrls };

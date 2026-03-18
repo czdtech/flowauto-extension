@@ -1,5 +1,6 @@
 import { MSG } from '../../shared/constants';
 import { TIMING, DOWNLOAD } from '../../shared/config';
+import { logger } from '../../shared/logger';
 import { isVisible, randomSleep } from '../utils/dom';
 import { querySelectorAllDeep } from '../finders';
 import type { TaskItem } from '../../shared/types';
@@ -78,9 +79,9 @@ async function getGridDownloadButtons(baselineUrls?: Set<string>): Promise<{btn:
         
         if (!searchRoot) searchRoot = document.body;
         
-        console.log(`[FlowAuto Debug] searchRoot tag: ${searchRoot.tagName}, class: ${searchRoot.className}`);
+        logger.debug(`searchRoot tag: ${searchRoot.tagName}, class: ${searchRoot.className}`);
         const allMenuBtns = querySelectorAllDeep<HTMLButtonElement>('button[aria-haspopup="menu"]', searchRoot);
-        console.log(`[FlowAuto Debug] Found ${allMenuBtns.length} menu buttons in searchRoot.`);
+        logger.debug(`Found ${allMenuBtns.length} menu buttons in searchRoot.`);
 
         // First try: standard direct download button (might not have aria-haspopup, so just search button)
         let btn = querySelectorAllDeep<HTMLButtonElement>('button', searchRoot).find((b: HTMLButtonElement) => {
@@ -96,7 +97,7 @@ async function getGridDownloadButtons(baselineUrls?: Set<string>): Promise<{btn:
            btn = allMenuBtns.find((b: HTMLButtonElement) => {
              const vis = isVisible(b);
              const text = (b.textContent || '').toLowerCase();
-             console.log(`[FlowAuto Debug] Checking button: visible=${vis}, text=${text}`);
+             logger.debug(`Checking button: visible=${vis}, text=${text}`);
              if (!vis) return false;
              return text.includes('更多') || text.includes('more');
            });
@@ -126,7 +127,7 @@ export async function downloadTopNLatestWithNaming(
   naming: (outputIndex: number) => DownloadNamingHint,
   baselineUrls?: Set<string>
 ): Promise<void> {
-  console.log(`[FlowAuto Debug] downloadTopNLatestWithNaming started for task: ${task.id}, n=${n}, mode=${task.mode}, dl_res=${task.downloadResolution}`);
+  logger.debug(`downloadTopNLatestWithNaming started for task: ${task.id}, n=${n}, mode=${task.mode}, dl_res=${task.downloadResolution}`);
   const isImage = task.mode === 'create-image';
 
   // Resolve the unified DownloadResolution into the correct keyword for the menu
@@ -141,7 +142,7 @@ export async function downloadTopNLatestWithNaming(
   }
 
   let buttonPairs = await getGridDownloadButtons(baselineUrls);
-  console.log(`[FlowAuto Debug] Target Resolution: ${targetRes}, Found Buttons at start: ${buttonPairs.length}`);
+  logger.debug(`Target Resolution: ${targetRes}, Found Buttons at start: ${buttonPairs.length}`);
 
   // Flow grid displays newest items first. Take the first `n` buttons.
   if (buttonPairs.length > n) {
@@ -152,7 +153,7 @@ export async function downloadTopNLatestWithNaming(
     if (baselineUrls && baselineUrls.size > 0) {
       const newImgs = getNewGenerationImages(baselineUrls);
       if (newImgs.length > 0) {
-        console.warn(`[FlowAuto Debug] ⚠️ 未找到包含 '下载/download' 的按钮。尝试直接通过新卡片的图片URL下载...`);
+        logger.warn(`未找到包含 '下载/download' 的按钮。尝试直接通过新卡片的图片URL下载...`);
         const imgsToDownload = newImgs.length > n ? newImgs.slice(0, n) : newImgs;
         let downloadedCount = 0;
 
@@ -162,7 +163,7 @@ export async function downloadTopNLatestWithNaming(
           const src = getTrackableUrl(img);
 
           if (src) {
-            console.log(`[FlowAuto Debug] 提取到图片URL: ${src}，发起 DOWNLOAD_BY_URL`);
+            logger.debug(`提取到图片URL: ${src}，发起 DOWNLOAD_BY_URL`);
             await chrome.runtime.sendMessage({
               type: MSG.DOWNLOAD_BY_URL,
               url: src,
@@ -175,17 +176,17 @@ export async function downloadTopNLatestWithNaming(
         }
         
         if (downloadedCount > 0) {
-          console.log(`[FlowAuto] ✅ 成功回退通过URL下载 ${downloadedCount}/${imgsToDownload.length} 项`);
+          logger.info(`成功回退通过URL下载 ${downloadedCount}/${imgsToDownload.length} 项`);
           return;
         }
       }
     }
 
-    console.warn(`[FlowAuto] ⚠️ 无可用下载按钮且未能提取到图片URL，跳过下载。`);
+    logger.warn(`无可用下载按钮且未能提取到图片URL，跳过下载。`);
     return;
   }
 
-  console.log(`[FlowAuto Debug] 准备下载 ${buttonPairs.length} 项，目标分辨率: ${targetRes}`);
+  logger.debug(`准备下载 ${buttonPairs.length} 项，目标分辨率: ${targetRes}`);
 
   let downloadedCount = 0;
   for (let i = 0; i < buttonPairs.length; i++) {
@@ -193,7 +194,7 @@ export async function downloadTopNLatestWithNaming(
     // outputIndex starts from 1. 1 is usually the first generated output variant.
     const hint = naming(i + 1);
 
-    console.log(`[FlowAuto Debug] 下载第 ${i + 1}/${buttonPairs.length} 项 (任务ID: ${hint.taskId}) - 触发 btn.click()`);
+    logger.debug(`下载第 ${i + 1}/${buttonPairs.length} 项 (任务ID: ${hint.taskId}) - 触发 btn.click()`);
 
     // 1. Tell the background script to expect a download and rename it.
     await chrome.runtime.sendMessage({
@@ -250,7 +251,7 @@ export async function downloadTopNLatestWithNaming(
     });
 
     if (isMoreMenu) {
-       console.log(`[FlowAuto Debug] 进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...`);
+       logger.debug(`进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...`);
        const dlItem = menuItems.find(el => (el.textContent || '').includes('下载') && !(el.textContent || '').toLowerCase().includes('1k'));
        if (dlItem) {
            // Phase 1: Hover to try expanding submenu (Radix submenus use hover)
@@ -277,7 +278,7 @@ export async function downloadTopNLatestWithNaming(
            
            if (!hasResolution) {
              // Phase 2: Hover didn't expand submenu - try click as fallback
-             console.log(`[FlowAuto Debug] 悬浮未展开子菜单，尝试 click()...`);
+             logger.debug(`悬浮未展开子菜单，尝试 click()...`);
              dlItem.click();
              await randomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX);
              subItems = Array.from(document.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
@@ -285,13 +286,13 @@ export async function downloadTopNLatestWithNaming(
            }
            
            menuItems = subItems;
-           console.log(`[FlowAuto Debug] 展开后找到 ${menuItems.length} 个菜单项`);
+           logger.debug(`展开后找到 ${menuItems.length} 个菜单项`);
        }
     }
 
-    console.log(`[FlowAuto Debug] 找到了 ${menuItems.length} 个可见的 menuitem`);
+    logger.debug(`找到了 ${menuItems.length} 个可见的 menuitem`);
     if (menuItems.length === 0) {
-      console.warn(`[FlowAuto Debug] ⚠️ 未找到下载菜单项，可能是单分辨率模型(如Nano Banana Pro)。尝试直接通过URL下载...`);
+      logger.warn(`未找到下载菜单项，可能是单分辨率模型(如Nano Banana Pro)。尝试直接通过URL下载...`);
       
       let imgSrc: string | null = getTrackableUrl(img);
 
@@ -313,7 +314,7 @@ export async function downloadTopNLatestWithNaming(
       }
 
       if (imgSrc) {
-        console.log(`[FlowAuto Debug] 提取到图片URL: ${imgSrc}，通过 BACKGROUND 发起 DOWNLOAD_BY_URL`);
+        logger.debug(`提取到图片URL: ${imgSrc}，通过 BACKGROUND 发起 DOWNLOAD_BY_URL`);
         await chrome.runtime.sendMessage({
           type: MSG.DOWNLOAD_BY_URL,
           url: imgSrc,
@@ -323,7 +324,7 @@ export async function downloadTopNLatestWithNaming(
         downloadedCount++;
         await randomSleep(TIMING.URL_DOWNLOAD_MIN, TIMING.URL_DOWNLOAD_MAX);
       } else {
-        console.warn(`[FlowAuto Debug] 未能提取到图片的URL`);
+        logger.warn(`未能提取到图片的URL`);
       }
       
       continue;
@@ -332,7 +333,7 @@ export async function downloadTopNLatestWithNaming(
     // 4. Try to find the exact resolution requested
     let targetMenuItem = menuItems.find((item: HTMLElement) => {
       const text = (item.textContent || '').toLowerCase() + (item.getAttribute('name') || '').toLowerCase();
-      console.log(`[FlowAuto Debug] 检查菜单项: "${text}"`);
+      logger.debug(`检查菜单项: "${text}"`);
       if (targetRes === '4K') return text.includes('4k');
       if (targetRes === '2K') return text.includes('2k');
       if (targetRes === '1K') return text.includes('1k');
@@ -343,7 +344,7 @@ export async function downloadTopNLatestWithNaming(
 
     // 5. Fallback logic: Auto-downgrade if exact resolution (like 4K) is unavailable.
     if (!targetMenuItem) {
-      console.warn(`[FlowAuto] ⚠️ 下载菜单中没有找到请求的分辨率 (${targetRes})，正在自动降级选择...`);
+      logger.warn(`下载菜单中没有找到请求的分辨率 (${targetRes})，正在自动降级选择...`);
       targetMenuItem = menuItems.find((item: HTMLElement) => {
         const text = (item.textContent || '').toLowerCase();
         return text.includes('2k') || text.includes('1080') || text.includes('高分辨率') || text.includes('high');
@@ -354,7 +355,7 @@ export async function downloadTopNLatestWithNaming(
     }
 
     if (targetMenuItem) {
-      console.log(`[FlowAuto] 点击下载项: "${targetMenuItem.textContent?.trim()}"`);
+      logger.info(`点击下载项: "${targetMenuItem.textContent?.trim()}"`);
       
       // Use native click — the reference ac15 project proves this is all React needs
       targetMenuItem.click();
@@ -362,10 +363,10 @@ export async function downloadTopNLatestWithNaming(
       downloadedCount++;
       await randomSleep(TIMING.BETWEEN_DOWNLOADS_MIN, TIMING.BETWEEN_DOWNLOADS_MAX);
     } else {
-        console.warn(`[FlowAuto] ⚠️ 最终未能找到任何可用的下载菜单项。`);
+        logger.warn(`最终未能找到任何可用的下载菜单项。`);
     }
   }
 
-  console.log(`[FlowAuto] ✅ 成功发起 ${downloadedCount}/${buttonPairs.length} 个下载请求`);
+  logger.info(`成功发起 ${downloadedCount}/${buttonPairs.length} 个下载请求`);
 
 }

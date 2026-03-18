@@ -23,6 +23,7 @@
 import { querySelectorAllDeep } from "../finders";
 import { getElementName, normalizeForMatch } from "../utils/aria";
 import { forceClick, isVisible, randomSleep, sleep, waitFor } from "../utils/dom";
+import { logger } from "../../shared/logger";
 
 // ---------------------------------------------------------------------------
 // DOM finders
@@ -223,7 +224,7 @@ async function searchInResourcePanel(
   }
 
   if (!searchInput) {
-    console.log("[FlowAuto] 资源面板未找到搜索框，将使用滚动查找");
+    logger.debug("资源面板未找到搜索框，将使用滚动查找");
     return false;
   }
 
@@ -246,7 +247,7 @@ async function searchInResourcePanel(
   // to adaptively wait for the full filter result.
   await randomSleep(300, 500);
 
-  console.log(`[FlowAuto] 资源面板搜索: "${searchTerm}"，等待过滤结果`);
+  logger.debug(`资源面板搜索: "${searchTerm}"，等待过滤结果`);
   return true;
 }
 
@@ -277,8 +278,8 @@ async function waitForSearchResultsStable(
     if (currentCount === lastCount) {
       streak++;
       if (streak >= stableCount) {
-        console.log(
-          `[FlowAuto] 搜索结果已稳定: ${currentCount} 项 (${streak} 次不变, ${Date.now() - start}ms)`,
+        logger.debug(
+          `搜索结果已稳定: ${currentCount} 项 (${streak} 次不变, ${Date.now() - start}ms)`,
         );
         return;
       }
@@ -288,8 +289,8 @@ async function waitForSearchResultsStable(
     }
   }
 
-  console.log(
-    `[FlowAuto] 搜索结果等待超时 (${timeoutMs}ms), 当前 ${lastCount} 项`,
+  logger.debug(
+    `搜索结果等待超时 (${timeoutMs}ms), 当前 ${lastCount} 项`,
   );
 }
 
@@ -396,18 +397,18 @@ async function trySelectFromResourcePanel(
     const searchRoot = panelRoot ?? null;
 
     if (!searchRoot) {
-      console.warn(`[FlowAuto] 无法定位资源面板容器，跳过面板选择以避免误点击`);
+      logger.warn(`无法定位资源面板容器，跳过面板选择以避免误点击`);
       await closeResourcePanel().catch(() => {});
       return false;
     }
 
-    console.log(
-      `[FlowAuto] 资源面板容器: tag=${searchRoot.tagName}, role=${searchRoot.getAttribute("role")}, children=${searchRoot.querySelectorAll("img").length} imgs`,
+    logger.debug(
+      `资源面板容器: tag=${searchRoot.tagName}, role=${searchRoot.getAttribute("role")}, children=${searchRoot.querySelectorAll("img").length} imgs`,
     );
 
     const searched = await searchInResourcePanel(searchRoot, filename);
     if (!searched) {
-      console.log("[FlowAuto] 未找到搜索框，跳过资源面板选择");
+      logger.debug("未找到搜索框，跳过资源面板选择");
       await closeResourcePanel().catch(() => {});
       return false;
     }
@@ -424,15 +425,15 @@ async function trySelectFromResourcePanel(
     const match = findItemByFilenameText(searchRoot, filename);
 
     if (!match) {
-      console.log(
-        `[FlowAuto] 资源面板搜索 "${filename}" 无精确匹配项，回退到上传`,
+      logger.debug(
+        `资源面板搜索 "${filename}" 无精确匹配项，回退到上传`,
       );
       await closeResourcePanel().catch(() => {});
       return false;
     }
 
-    console.log(
-      `[FlowAuto] 资源面板: 找到 "${filename}"，点击选择 (tag=${match.tagName})`,
+    logger.debug(
+      `资源面板: 找到 "${filename}"，点击选择 (tag=${match.tagName})`,
     );
     forceClick(match);
     await randomSleep(300, 600);
@@ -455,7 +456,7 @@ async function trySelectFromResourcePanel(
     if (document.body.contains(searchRoot) && isVisible(searchRoot)) {
       attachBtn = findAddToPromptButton(searchRoot);
       if (attachBtn) {
-        console.log('[FlowAuto] 资源面板: 检测到"添加到提示"按钮，执行确认');
+        logger.debug('资源面板: 检测到"添加到提示"按钮，执行确认');
         forceClick(attachBtn);
         await randomSleep(250, 500);
       }
@@ -463,8 +464,8 @@ async function trySelectFromResourcePanel(
 
     // Navigation guard.
     if (location.href !== urlBefore) {
-      console.error(
-        `[FlowAuto] ❌ 资源面板点击导致页面导航! ${urlBefore} → ${location.href}`,
+      logger.error(
+        `资源面板点击导致页面导航! ${urlBefore} → ${location.href}`,
       );
       await closeResourcePanel().catch(() => {});
       return false;
@@ -475,12 +476,12 @@ async function trySelectFromResourcePanel(
 
     await closeResourcePanel().catch(() => {});
 
-    console.log(
-      `[FlowAuto] ✅ 从资源面板选择成功: ${filename}${attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
+    logger.info(
+      `从资源面板选择成功: ${filename}${attachBtn ? " (confirm)" : panelClosed ? " (auto-closed)" : ""}`,
     );
     return true;
   } catch (e: any) {
-    console.warn(`[FlowAuto] 资源面板选择失败: ${e?.message ?? e}`);
+    logger.warn(`资源面板选择失败: ${e?.message ?? e}`);
     await closeResourcePanel().catch(() => {});
     return false;
   }
@@ -536,16 +537,16 @@ function findItemByFilenameText(
 
     // Exact match on direct text (best case)
     if (directText === target) {
-      console.log(
-        `[FlowAuto] 文件名精确匹配 (directText): "${directText}" === "${target}"`,
+      logger.debug(
+        `文件名精确匹配 (directText): "${directText}" === "${target}"`,
       );
       return el;
     }
 
     // Exact match on full text (in case there are no icon issues)
     if (fullText === target) {
-      console.log(
-        `[FlowAuto] 文件名精确匹配 (fullText): "${fullText}" === "${target}"`,
+      logger.debug(
+        `文件名精确匹配 (fullText): "${fullText}" === "${target}"`,
       );
       return el;
     }
@@ -557,16 +558,16 @@ function findItemByFilenameText(
       fullText.endsWith(target) &&
       fullText.length <= target.length + 30
     ) {
-      console.log(
-        `[FlowAuto] 文件名尾部匹配: "${fullText}" endsWith "${target}"`,
+      logger.debug(
+        `文件名尾部匹配: "${fullText}" endsWith "${target}"`,
       );
       return el;
     }
   }
 
   // Log debug info for troubleshooting
-  console.log(
-    `[FlowAuto] 面板中无满足精确匹配的项 (搜索目标: "${target}")`,
+  logger.debug(
+    `面板中无满足精确匹配的项 (搜索目标: "${target}")`,
     debugTexts.length > 0
       ? `候选项: ${debugTexts.join(" | ")}`
       : "无候选项",
@@ -657,8 +658,8 @@ function armFileInputInterception(
     armed.push(input);
 
     input.click = function (this: HTMLInputElement) {
-      console.log(
-        "[FlowAuto] 拦截 file input.click() — 注入文件替代原生对话框",
+      logger.debug(
+        "拦截 file input.click() — 注入文件替代原生对话框",
       );
 
       const dt = new DataTransfer();
@@ -696,8 +697,8 @@ function armFileInputInterception(
   for (const inp of existing) {
     armInput(inp);
   }
-  console.log(
-    `[FlowAuto] 已在 ${existing.length} 个现有 file input 上安装拦截`,
+  logger.debug(
+    `已在 ${existing.length} 个现有 file input 上安装拦截`,
   );
 
   // Watch for newly created file inputs
@@ -705,7 +706,7 @@ function armFileInputInterception(
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node instanceof HTMLInputElement && node.type === "file") {
-          console.log("[FlowAuto] MutationObserver: 检测到新 file input");
+          logger.debug("MutationObserver: 检测到新 file input");
           armInput(node);
           return;
         }
@@ -713,8 +714,8 @@ function armFileInputInterception(
           const inp =
             node.querySelector<HTMLInputElement>('input[type="file"]');
           if (inp) {
-            console.log(
-              "[FlowAuto] MutationObserver: 在子树中检测到 file input",
+            logger.debug(
+              "MutationObserver: 在子树中检测到 file input",
             );
             armInput(inp);
             return;
@@ -729,7 +730,7 @@ function armFileInputInterception(
   });
 
   timer = setTimeout(() => {
-    console.warn("[FlowAuto] 等待 file input.click() 调用超时");
+    logger.warn("等待 file input.click() 调用超时");
     finish(false);
   }, timeoutMs);
 
@@ -777,10 +778,10 @@ async function tryClipboardPaste(
       }),
     );
     await randomSleep(800, 1500);
-    console.log("[FlowAuto] clipboard paste 事件已派发");
+    logger.debug("clipboard paste 事件已派发");
     return true;
   } catch (e) {
-    console.warn("[FlowAuto] clipboard paste 失败:", e);
+    logger.warn("clipboard paste 失败:", e);
     return false;
   }
 }
@@ -817,7 +818,7 @@ async function tryDragDrop(blob: Blob, filename: string): Promise<boolean> {
   await sleep(50);
   dropTarget.dispatchEvent(new DragEvent("drop", evtOpts));
   await randomSleep(800, 1500);
-  console.log("[FlowAuto] drag-drop 事件已派发");
+  logger.debug("drag-drop 事件已派发");
   return true;
 }
 
@@ -861,34 +862,34 @@ function hasVisibleProgress(): boolean {
 async function waitForUploadComplete(): Promise<void> {
   // Phase 1: Wait briefly for Flow to recognize the file and START uploading.
   // A progress indicator should appear within a few seconds.
-  console.log("[FlowAuto] 等待上传开始...");
+  logger.debug("等待上传开始...");
   let uploadStarted = false;
   for (let i = 0; i < 10; i++) {
     await sleep(500);
     if (hasVisibleProgress()) {
       uploadStarted = true;
-      console.log("[FlowAuto] 检测到上传进度指示器");
+      logger.debug("检测到上传进度指示器");
       break;
     }
   }
 
   if (!uploadStarted) {
-    console.warn("[FlowAuto] 未检测到上传进度指示器，可能已快速完成或未开始");
+    logger.warn("未检测到上传进度指示器，可能已快速完成或未开始");
     await sleep(2000);
     return;
   }
 
   // Phase 2: Wait for progress indicators to DISAPPEAR (upload complete).
-  console.log("[FlowAuto] 等待上传完成 (0%→100%)...");
+  logger.debug("等待上传完成 (0%→100%)...");
   try {
     await waitFor(() => (hasVisibleProgress() ? null : true), {
       timeoutMs: 60000,
       intervalMs: 1000,
       debugName: "upload-progress-done",
     });
-    console.log("[FlowAuto] 上传进度已完成");
+    logger.debug("上传进度已完成");
   } catch {
-    console.warn("[FlowAuto] 等待上传完成超时 (60s)，继续执行");
+    logger.warn("等待上传完成超时 (60s)，继续执行");
   }
   await sleep(1500);
 }
@@ -946,8 +947,8 @@ export async function clearAttachedReferences(): Promise<void> {
         continue;
     }
 
-    console.log(
-      `[FlowAuto] 清除参考图: 点击 "${getElementName(btn).substring(0, 30)}"`,
+    logger.debug(
+      `清除参考图: 点击 "${getElementName(btn).substring(0, 30)}"`,
     );
     forceClick(btn);
     cleared++;
@@ -961,8 +962,8 @@ export async function clearAttachedReferences(): Promise<void> {
   if (promptInput) {
     const imgs = promptInput.querySelectorAll("img");
     if (imgs.length > 0) {
-      console.log(
-        `[FlowAuto] 清除 contenteditable 内 ${imgs.length} 张内联图片`,
+      logger.debug(
+        `清除 contenteditable 内 ${imgs.length} 张内联图片`,
       );
       for (const img of imgs) img.remove();
       promptInput.dispatchEvent(
@@ -974,10 +975,10 @@ export async function clearAttachedReferences(): Promise<void> {
   }
 
   if (cleared > 0) {
-    console.log(`[FlowAuto] ✅ 已清除 ${cleared} 个参考图/内联图片`);
+    logger.info(`已清除 ${cleared} 个参考图/内联图片`);
     await randomSleep(400, 800);
   } else {
-    console.log("[FlowAuto] 未发现需要清除的参考图");
+    logger.debug("未发现需要清除的参考图");
   }
 }
 
@@ -1015,8 +1016,8 @@ export async function injectImageToFlow(
   filename: string,
   options?: { mediaUuid?: string },
 ): Promise<InjectResult> {
-  console.log(
-    `[FlowAuto] 注入图片: ${filename} (${imageBlob.size} bytes, ${imageBlob.type})`,
+  logger.info(
+    `注入图片: ${filename} (${imageBlob.size} bytes, ${imageBlob.type})`,
   );
 
   if (imageBlob.size < 100) {
@@ -1035,26 +1036,26 @@ export async function injectImageToFlow(
         return { success: true, mediaUuid: options.mediaUuid };
       }
     } catch (e: any) {
-      console.warn(`[FlowAuto] 资源面板选择异常: ${e?.message ?? e}`);
+      logger.warn(`资源面板选择异常: ${e?.message ?? e}`);
     }
   }
 
   // ── Primary: Clipboard paste ───────────────────────────────────────
   const uuidsBefore = collectMediaUuids();
   try {
-    console.log("[FlowAuto] 剪贴板粘贴上传...");
+    logger.debug("剪贴板粘贴上传...");
     if (await tryClipboardPaste(imageBlob, filename)) {
       await waitForUploadComplete();
       const newUuid = captureNewMediaUuid(uuidsBefore);
       if (newUuid) {
-        console.log(`[FlowAuto] ✅ 上传成功: ${filename} (UUID=${newUuid})`);
+        logger.info(`上传成功: ${filename} (UUID=${newUuid})`);
       } else {
-        console.log(`[FlowAuto] ✅ 上传成功: ${filename} (未捕获UUID)`);
+        logger.info(`上传成功: ${filename} (未捕获UUID)`);
       }
       return { success: true, mediaUuid: newUuid };
     }
   } catch (e: any) {
-    console.warn(`[FlowAuto] 剪贴板粘贴失败: ${e?.message ?? e}`);
+    logger.warn(`剪贴板粘贴失败: ${e?.message ?? e}`);
   }
 
   // ── Fallback: Resource panel + file-input interception ─────────────
@@ -1063,7 +1064,7 @@ export async function injectImageToFlow(
   });
   const uuidsBefore2 = collectMediaUuids();
   try {
-    console.log("[FlowAuto] 回退: 资源面板上传");
+    logger.debug("回退: 资源面板上传");
     await openResourcePanel();
 
     const uploadBtn = await waitFor(findUploadButtonInPanel, {
@@ -1074,43 +1075,43 @@ export async function injectImageToFlow(
 
     const { promise: intercepted, disarm } = armFileInputInterception(file);
 
-    console.log("[FlowAuto] 点击上传按钮...");
+    logger.debug("点击上传按钮...");
     forceClick(uploadBtn);
 
     const ok = await intercepted;
     if (ok) {
-      console.log("[FlowAuto] 文件已通过 click() 拦截注入");
+      logger.debug("文件已通过 click() 拦截注入");
       await waitForUploadComplete();
       await closeResourcePanel();
       const newUuid = captureNewMediaUuid(uuidsBefore2);
-      console.log(
-        `[FlowAuto] ✅ 上传成功: ${filename}${newUuid ? ` (UUID=${newUuid})` : ""}`,
+      logger.info(
+        `上传成功: ${filename}${newUuid ? ` (UUID=${newUuid})` : ""}`,
       );
       await randomSleep(800, 1500);
       return { success: true, mediaUuid: newUuid };
     }
     disarm();
-    console.warn("[FlowAuto] 回退: input.click() 未被触发");
+    logger.warn("回退: input.click() 未被触发");
     await closeResourcePanel().catch(() => {});
   } catch (e: any) {
-    console.warn(`[FlowAuto] 回退失败: ${e?.message ?? e}`);
+    logger.warn(`回退失败: ${e?.message ?? e}`);
     await closeResourcePanel().catch(() => {});
   }
 
   // ── Last resort: Drag and drop ─────────────────────────────────────
   const uuidsBefore3 = collectMediaUuids();
   try {
-    console.log("[FlowAuto] 最后手段: 拖放");
+    logger.debug("最后手段: 拖放");
     if (await tryDragDrop(imageBlob, filename)) {
       await waitForUploadComplete();
       const newUuid = captureNewMediaUuid(uuidsBefore3);
-      console.log(
-        `[FlowAuto] ✅ 上传成功: ${filename}${newUuid ? ` (UUID=${newUuid})` : ""}`,
+      logger.info(
+        `上传成功: ${filename}${newUuid ? ` (UUID=${newUuid})` : ""}`,
       );
       return { success: true, mediaUuid: newUuid };
     }
   } catch (e: any) {
-    console.warn(`[FlowAuto] 拖放失败: ${e?.message ?? e}`);
+    logger.warn(`拖放失败: ${e?.message ?? e}`);
   }
 
   throw new Error(`所有图片注入策略均失败 (${filename})`);

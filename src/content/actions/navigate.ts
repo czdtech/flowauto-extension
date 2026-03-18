@@ -1,5 +1,6 @@
 import { getElementName, normalizeForMatch } from '../utils/aria';
 import { findAllByRole, forceClick, isVisible, sleep, waitFor } from '../utils/dom';
+import { logger } from '../../shared/logger';
 import { openSettingsPanel } from './settings';
 
 export type TopTab = 'video' | 'image';
@@ -47,18 +48,18 @@ export async function selectTab(tab: TopTab): Promise<void> {
       }) || null;
     }, { timeoutMs: 10000, intervalMs: 500, debugName: `selectTab-${tab}` });
   } catch (e) {
-    console.warn(`[FlowAuto] selectTab: 未找到 ${tab} 标签页按钮`);
+    logger.warn(`selectTab: 未找到 ${tab} 标签页按钮`);
     return;
   }
 
   if (!target) return;
 
   if (target.getAttribute('aria-selected') === 'true') {
-    console.log(`[FlowAuto] selectTab: 已经在 ${tab} 标签页`);
+    logger.debug(`selectTab: 已经在 ${tab} 标签页`);
     return;
   }
 
   forceClick(target);
   await sleep(500);
-  console.log(`[FlowAuto] selectTab: 成功切换到 ${tab}`);
+  logger.info(`selectTab: 成功切换到 ${tab}`);
 }

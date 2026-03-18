@@ -1,4 +1,5 @@
 import { MSG } from "../shared/constants";
+import { logger } from "../shared/logger";
 import type {
   AnyRequest,
   ExecuteTaskRequest,
@@ -12,7 +13,7 @@ import { executeTask, resetExecutionSession } from "./actions/execute-task";
 import { getActiveTopTab } from "./actions/navigate";
 
 // Minimal debug signal to confirm injection on the page.
-console.debug("[FlowAuto] content script loaded:", location.href);
+logger.debug("content script loaded:", location.href);
 
 function isLabs(): boolean {
   return location.hostname === "labs.google";
@@ -63,10 +64,10 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === MSG.EXECUTE_TASK) {
       const req = message as ExecuteTaskRequest;
-      console.log(`[FlowAuto] 收到任务执行指令:`, req.task);
+      logger.info(`收到任务执行指令:`, req.task);
       executeTask(req.task)
         .then((result) => {
-          console.log(`[FlowAuto] 任务执行成功:`, result);
+          logger.info(`任务执行成功:`, result);
           sendResponse({
             type: MSG.TASK_RESULT,
             taskId: req.task.id,
@@ -75,7 +76,7 @@ chrome.runtime.onMessage.addListener(
           } satisfies TaskResultResponse);
         })
         .catch((err) => {
-          console.error(`[FlowAuto] 任务执行失败:`, err);
+          logger.error(`任务执行失败:`, err);
           sendResponse({
             type: MSG.TASK_RESULT,
             taskId: req.task.id,
@@ -98,7 +99,7 @@ chrome.runtime.onMessage.addListener(
           } satisfies ResetExecutionSessionResponse);
         })
         .catch((err) => {
-          console.warn("[FlowAuto] 重置执行会话失败:", err);
+          logger.warn("重置执行会话失败:", err);
           sendResponse({
             type: MSG.RESET_EXECUTION_SESSION,
             ok: false,

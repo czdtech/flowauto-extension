@@ -1,4 +1,5 @@
 import { getElementName, matchesName, type NameMatcher } from './aria';
+import { logger } from '../../shared/logger';
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -256,7 +257,7 @@ export async function typeInputElement(el: HTMLElement, value: string): Promise<
     tryExecCommand(el, value);
     if (verifyInjection(el, value)) return;
 
-    console.error(`[FlowAuto] ❌ 所有 contentEditable 策略均失败`);
+    logger.error(`所有 contentEditable 策略均失败`);
     return;
   }
 
