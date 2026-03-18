@@ -1,5 +1,4 @@
-rc/sidepanel/components/SettingsPanel.svelte</path>
-<content lang="svelte"><script lang="ts">
+<script lang="ts">
   import type { UserSettings } from '../../shared/types';
   
   interface Props {

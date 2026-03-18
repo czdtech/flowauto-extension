@@ -1,5 +1,3 @@
-rc/sidepanel/App.svelte</path>
-<content lang="svelte">
 <script lang="ts">
   import { onMount } from 'svelte';
   import StatusHeader from './components/StatusHeader.svelte';

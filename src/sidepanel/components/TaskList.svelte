@@ -1,5 +1,4 @@
-rc/sidepanel/components/TaskList.svelte</path>
-<content lang="svelte"><script lang="ts">
+<script lang="ts">
   import type { QueueState, TaskItem, TaskStatus, GenerationMode } from '../../shared/types';
   
   interface Props {

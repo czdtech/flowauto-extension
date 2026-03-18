@@ -1,5 +1,3 @@
-rc/sidepanel/components/StatusHeader.svelte</path>
-<content lang="svelte">
 <script lang="ts">
   type Status = 'checking' | 'connected' | 'disconnected';
   

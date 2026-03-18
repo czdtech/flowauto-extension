@@ -1,5 +1,4 @@
-rc/sidepanel/components/TaskInput.svelte</path>
-<content lang="svelte"><script lang="ts">
+<script lang="ts">
   import type { GenerationType } from '../../shared/types';
   
   interface ImportSummary {
