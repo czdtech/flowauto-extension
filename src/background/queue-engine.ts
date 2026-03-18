@@ -1,4 +1,6 @@
 import { resolveCapabilities } from '../shared/capability-guard';
+import { LIMITS } from '../shared/config';
+import { logger } from '../shared/logger';
 import {
   DEFAULT_QUEUE_STATE,
   DEFAULT_SETTINGS,
@@ -66,7 +68,7 @@ export async function getAppState(): Promise<{ queue: QueueState; settings: User
 export async function clearQueue(): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   // GC: clean up all image blobs since we're wiping everything.
-  void clearAllImageBlobs().catch(() => {});
+  void clearAllImageBlobs().catch(e => logger.warn("clearAllImageBlobs failed", e));
   queue = structuredClone(DEFAULT_QUEUE_STATE);
   await persist();
   return { queue, settings };
@@ -79,7 +81,7 @@ export async function clearHistory(): Promise<{ queue: QueueState; settings: Use
   const removed = queue.tasks.filter((t) => DONE.has(t.status));
   // GC: clean up image blobs from removed tasks.
   const refIds = collectAssetRefIds(removed);
-  if (refIds.length) void deleteImageBlobs(refIds).catch(() => {});
+  if (refIds.length) void deleteImageBlobs(refIds).catch(e => logger.warn("deleteImageBlobs failed", e));
   queue = {
     ...queue,
     tasks: queue.tasks.filter((t) => !DONE.has(t.status)),
@@ -153,7 +155,7 @@ export async function removeTask(
   const removed = queue.tasks.find((t) => t.id === taskId);
   if (removed) {
     const refIds = collectAssetRefIds([removed]);
-    if (refIds.length) void deleteImageBlobs(refIds).catch(() => {});
+    if (refIds.length) void deleteImageBlobs(refIds).catch(e => logger.warn("deleteImageBlobs failed", e));
   }
   queue = {
     ...queue,
@@ -275,7 +277,6 @@ export async function markTaskError(
   return { queue, settings };
 }
 
-const MAX_LOGS_PER_TASK = 30;
 
 export async function appendTaskLog(taskId: string, msg: string): Promise<void> {
   await ensureInitialized();
@@ -284,7 +285,7 @@ export async function appendTaskLog(taskId: string, msg: string): Promise<void> 
     ...queue,
     tasks: queue.tasks.map((t) => {
       if (t.id !== taskId) return t;
-      const logs = [...(t.logs ?? []), entry].slice(-MAX_LOGS_PER_TASK);
+      const logs = [...(t.logs ?? []), entry].slice(-LIMITS.MAX_LOGS_PER_TASK);
       return { ...t, logs };
     }),
   };
