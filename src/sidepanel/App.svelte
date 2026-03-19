@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import StatusHeader from './components/StatusHeader.svelte';
+  import ProjectSelector from './components/ProjectSelector.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
   import TaskInput from './components/TaskInput.svelte';
   import TaskList from './components/TaskList.svelte';
@@ -12,6 +13,16 @@
     PageStateResponse,
     PingRequest,
     PongResponse,
+    ProjectCreateRequest,
+    ProjectCreateResponse,
+    ProjectDeleteRequest,
+    ProjectDeleteResponse,
+    ProjectListRequest,
+    ProjectListResponse,
+    ProjectRenameRequest,
+    ProjectRenameResponse,
+    ProjectSwitchRequest,
+    ProjectSwitchResponse,
     QueueAddTasksRequest,
     QueueClearHistoryRequest,
     QueueGetStateRequest,
@@ -24,7 +35,7 @@
     SettingsUpdateRequest,
   } from '../shared/protocol';
   import { modeForModel } from '../shared/types';
-  import type { GenerationMode, GenerationType, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
+  import type { GenerationMode, GenerationType, Project, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
 
@@ -45,6 +56,9 @@
   let settings: UserSettings | null = $state(null);
   let queueError = $state('');
   let filter: 'all' | TaskStatus = $state('all');
+  let projects: Project[] = $state([]);
+  let activeProjectId = $state('');
+  let activeProjectName = $derived(projects.find((p) => p.id === activeProjectId)?.name ?? '');
 
   let s_defaultModel: UserSettings['defaultModel'] = $state('nano-banana-2');
   let s_defaultGenerationType: GenerationType = $state('text-to-image');
@@ -350,6 +364,79 @@
     }
   }
 
+  async function refreshProjects(): Promise<void> {
+    try {
+      const res = await sendMessage<ProjectListRequest, ProjectListResponse>({
+        type: MSG.PROJECT_LIST,
+      });
+      projects = res.projects;
+      activeProjectId = res.activeProjectId;
+    } catch {
+      // silently keep last known state
+    }
+  }
+
+  async function handleProjectSwitch(projectId: string): Promise<void> {
+    queueError = '';
+    try {
+      const res = await sendMessage<ProjectSwitchRequest, ProjectSwitchResponse>({
+        type: MSG.PROJECT_SWITCH,
+        projectId,
+      });
+      queue = res.queue;
+      settings = res.settings;
+      activeProjectId = res.activeProjectId;
+      if (settings) syncSettingsDraft(settings);
+    } catch {
+      queueError = '切换项目失败';
+    }
+  }
+
+  async function handleProjectCreate(name: string): Promise<void> {
+    queueError = '';
+    try {
+      const res = await sendMessage<ProjectCreateRequest, ProjectCreateResponse>({
+        type: MSG.PROJECT_CREATE,
+        name,
+      });
+      projects = res.projects;
+      activeProjectId = res.activeProjectId;
+    } catch {
+      queueError = '创建项目失败';
+    }
+  }
+
+  async function handleProjectRename(projectId: string, newName: string): Promise<void> {
+    queueError = '';
+    try {
+      const res = await sendMessage<ProjectRenameRequest, ProjectRenameResponse>({
+        type: MSG.PROJECT_RENAME,
+        projectId,
+        newName,
+      });
+      projects = res.projects;
+    } catch {
+      queueError = '重命名项目失败';
+    }
+  }
+
+  async function handleProjectDelete(projectId: string): Promise<void> {
+    queueError = '';
+    try {
+      const res = await sendMessage<ProjectDeleteRequest, ProjectDeleteResponse>({
+        type: MSG.PROJECT_DELETE,
+        projectId,
+      });
+      projects = res.projects;
+      activeProjectId = res.activeProjectId;
+      // Reload queue/settings for the new active project
+      await refreshQueue();
+      if (settings) syncSettingsDraft(settings);
+    } catch {
+      queueError = '删除项目失败';
+    }
+  }
+
   function syncSettingsDraft(next: UserSettings | null): void {
     if (!next) return;
     s_defaultModel = next.defaultModel;
@@ -496,7 +583,7 @@
   let timer: number | undefined;
   onMount(() => {
     const tick = async () => {
-      await Promise.all([ping(), refreshQueue(), refreshPageState()]);
+      await Promise.all([ping(), refreshQueue(), refreshPageState(), refreshProjects()]);
     };
 
     tick();
@@ -553,7 +640,18 @@
 </script>
 
 <main>
-  <StatusHeader {status} {title} {reason} onRefresh={ping} />
+  <StatusHeader {status} {title} {reason} projectName={activeProjectName} onRefresh={ping} />
+
+  {#if projects.length > 0}
+    <ProjectSelector
+      {projects}
+      {activeProjectId}
+      onSwitch={handleProjectSwitch}
+      onCreate={handleProjectCreate}
+      onRename={handleProjectRename}
+      onDelete={handleProjectDelete}
+    />
+  {/if}
 
   <section class="card card-gap">
     <SettingsPanel

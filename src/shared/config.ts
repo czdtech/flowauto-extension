@@ -134,6 +134,16 @@ export const DOWNLOAD = {
 // ============================================
 
 export const STORAGE_KEYS = {
-  QUEUE_STATE: 'flowauto.queueState.v1',
-  SETTINGS: 'flowauto.settings.v1',
+  PROJECTS_LIST: 'flowauto.projects.v1',
+  ACTIVE_PROJECT: 'flowauto.activeProject.v1',
+  projectQueue: (projectId: string) => `flowauto.project.${projectId}.queue.v1`,
+  projectSettings: (projectId: string) => `flowauto.project.${projectId}.settings.v1`,
+  // Legacy flat keys for migration detection
+  LEGACY_QUEUE: 'flowauto.queueState.v1',
+  LEGACY_SETTINGS: 'flowauto.settings.v1',
 } as const;
+
+/** chrome.storage.local quota in bytes (10 MB). */
+export const STORAGE_QUOTA_BYTES = 10 * 1024 * 1024;
+/** Warn when usage exceeds this fraction. */
+export const STORAGE_QUOTA_WARN_RATIO = 0.8;

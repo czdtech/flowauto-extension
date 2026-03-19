@@ -127,3 +127,9 @@ export interface ParsedPromptItem {
   inlineRefs?: string[];
   assets?: TaskAsset[];
 }
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: number;
+}

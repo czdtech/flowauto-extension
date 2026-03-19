@@ -11,6 +11,16 @@ import type {
   PageStateResponse,
   PingRequest,
   PongResponse,
+  ProjectCreateRequest,
+  ProjectCreateResponse,
+  ProjectDeleteRequest,
+  ProjectDeleteResponse,
+  ProjectListRequest,
+  ProjectListResponse,
+  ProjectRenameRequest,
+  ProjectRenameResponse,
+  ProjectSwitchRequest,
+  ProjectSwitchResponse,
   QueueAddTasksRequest,
   QueueClearHistoryRequest,
   QueueClearRequest,
@@ -40,11 +50,17 @@ import {
   appendTaskLog,
   clearHistory,
   clearQueue,
+  createProject,
+  deleteProject,
+  getActiveProjectId,
   getAppState,
+  listProjects,
   removeTask,
+  renameProject,
   retryErrors,
   setRunning,
   skipTask,
+  switchProject,
   updateSettings,
 } from "./queue-engine";
 import { expectDownload, initDownloadManager } from "./download-manager";
@@ -475,6 +491,57 @@ async function handleRefMediaUpsert(
   return { type: MSG.REF_MEDIA_UPSERT, ok: true };
 }
 
+async function handleProjectList(
+  _req: ProjectListRequest,
+): Promise<ProjectListResponse> {
+  const projects = await listProjects();
+  const activeId = await getActiveProjectId();
+  return { type: MSG.PROJECT_LIST, projects, activeProjectId: activeId };
+}
+
+async function handleProjectCreate(
+  req: ProjectCreateRequest,
+): Promise<ProjectCreateResponse> {
+  const project = await createProject(req.name);
+  const projects = await listProjects();
+  const activeId = await getActiveProjectId();
+  return {
+    type: MSG.PROJECT_CREATE,
+    project,
+    projects,
+    activeProjectId: activeId,
+  };
+}
+
+async function handleProjectRename(
+  req: ProjectRenameRequest,
+): Promise<ProjectRenameResponse> {
+  await renameProject(req.projectId, req.newName);
+  const projects = await listProjects();
+  return { type: MSG.PROJECT_RENAME, projects };
+}
+
+async function handleProjectDelete(
+  req: ProjectDeleteRequest,
+): Promise<ProjectDeleteResponse> {
+  await deleteProject(req.projectId);
+  const projects = await listProjects();
+  const activeId = await getActiveProjectId();
+  return { type: MSG.PROJECT_DELETE, projects, activeProjectId: activeId };
+}
+
+async function handleProjectSwitch(
+  req: ProjectSwitchRequest,
+): Promise<ProjectSwitchResponse> {
+  const state = await switchProject(req.projectId);
+  return {
+    type: MSG.PROJECT_SWITCH,
+    queue: state.queue,
+    settings: state.settings,
+    activeProjectId: req.projectId,
+  };
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
@@ -556,6 +623,16 @@ chrome.runtime.onMessage.addListener(
           return handleDownloadByUrl(message as DownloadByUrlRequest);
         if (message.type === MSG.GET_IMAGE_BLOB)
           return handleGetImageBlob(message as GetImageBlobRequest);
+        if (message.type === MSG.PROJECT_LIST)
+          return handleProjectList(message as ProjectListRequest);
+        if (message.type === MSG.PROJECT_CREATE)
+          return handleProjectCreate(message as ProjectCreateRequest);
+        if (message.type === MSG.PROJECT_RENAME)
+          return handleProjectRename(message as ProjectRenameRequest);
+        if (message.type === MSG.PROJECT_DELETE)
+          return handleProjectDelete(message as ProjectDeleteRequest);
+        if (message.type === MSG.PROJECT_SWITCH)
+          return handleProjectSwitch(message as ProjectSwitchRequest);
         return undefined;
       } catch {
         return await makeErrorResponse(message);

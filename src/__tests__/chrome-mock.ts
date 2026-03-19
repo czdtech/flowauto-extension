@@ -42,6 +42,15 @@ const chromeMock = {
         }
         return Promise.resolve();
       },
+      getBytesInUse: (callback?: (bytes: number) => void) => {
+        const json = JSON.stringify(storage);
+        const bytes = new TextEncoder().encode(json).length;
+        if (callback) {
+          callback(bytes);
+          return undefined;
+        }
+        return Promise.resolve(bytes);
+      },
     },
   },
   sidePanel: {
@@ -55,6 +64,11 @@ Object.defineProperty(globalThis, "chrome", {
   value: chromeMock,
   writable: true,
 });
+
+/** Expose the backing store so tests can pre-seed data. */
+export function getBackingStore(): Record<string, unknown> {
+  return storage;
+}
 
 // Reset storage between tests
 beforeEach?.(() => {

@@ -1,14 +1,15 @@
 <script lang="ts">
   type Status = 'checking' | 'connected' | 'disconnected';
-  
+
   interface Props {
     status: Status;
     title: string;
     reason: string;
+    projectName?: string;
     onRefresh: () => void;
   }
-  
-  let { status, title, reason, onRefresh }: Props = $props();
+
+  let { status, title, reason, projectName, onRefresh }: Props = $props();
   
   function reasonText(r: string): string {
     switch (r) {
@@ -29,7 +30,7 @@
 </script>
 
 <header>
-  <div class="title">FlowAuto</div>
+  <div class="title">FlowAuto{#if projectName}<span class="project-name"> · {projectName}</span>{/if}</div>
   <div class="header-status">
     {#if status === 'connected'}
       <span class="status ok" title={title || 'Flow 项目页'}>已连接：{title || 'Flow 项目页'}</span>
@@ -54,6 +55,11 @@
     font-weight: 700;
     letter-spacing: 0.2px;
     white-space: nowrap;
+  }
+  .project-name {
+    font-weight: 400;
+    opacity: 0.7;
+    font-size: 12px;
   }
   .header-status {
     flex: 1;
