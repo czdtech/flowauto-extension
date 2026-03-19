@@ -158,78 +158,49 @@
 
       let matchedCount = 0;
       const matchedFiles: string[] = [];
+      const warnings: string[] = [];
       let matchMode = '';
 
-      const hasAnyFilename = prompts.some((p) => !!p.filename);
+      const hasAnyInlineRefs = prompts.some(
+        (p) => !!p.inlineRefs && p.inlineRefs.length > 0,
+      );
 
       const imgByFullName = new Map<string, File>();
-      const imgByBaseName = new Map<string, File>();
-      for (const img of imageList) {
-        imgByFullName.set(img.name.toLowerCase(), img);
-        const base = stripExt(img.name).toLowerCase();
-        if (base.length >= 2) imgByBaseName.set(base, img);
-      }
+      for (const img of imageList) imgByFullName.set(img.name.toLowerCase(), img);
 
-      // Track whether filename-based matching actually matched anything.
-      let filenameMatchedCount = 0;
-
-      if (hasAnyFilename) {
-        matchMode = '按文件名匹配';
-        for (const p of prompts) {
-          if (!p.filename) continue;
-          const imageFile = imageFiles.get(p.filename);
-          if (!imageFile) continue;
-
-          p.assets = [await storeAsAsset(imageFile)];
-          matchedCount++;
-          filenameMatchedCount++;
-          matchedFiles.push(imageFile.name);
-        }
-      }
-
-      // Fall through to inline/smart matching when filename matching produced
-      // nothing, or when there were no filename hints at all.
-      if ((!hasAnyFilename || filenameMatchedCount === 0) && imageList.length > 0) {
-        let inlineTotal = 0;
-        const inlineResults: { promptIdx: number; refs: File[] }[] = [];
-
+      // Strategy 1: explicit inline references via @filename.ext
+      if (imageList.length > 0 && hasAnyInlineRefs) {
+        let inlineHits = 0;
         for (let i = 0; i < prompts.length; i++) {
-          const textLower = prompts[i].prompt.toLowerCase();
-          const refs: File[] = [];
-          const seen = new Set<string>();
-
-          for (const [fullName, img] of imgByFullName) {
-            if (textLower.includes(fullName) && !seen.has(img.name)) {
-              refs.push(img);
-              seen.add(img.name);
+          const refs = prompts[i].inlineRefs ?? [];
+          if (refs.length === 0) continue;
+          const assets: TaskAsset[] = [];
+          for (const ref of refs) {
+            const img = imgByFullName.get(ref.toLowerCase());
+            if (!img) {
+              warnings.push(`提示词引用了 @${ref} 但未上传该图片`);
+              continue;
             }
+            assets.push(await storeAsAsset(img));
+            if (!matchedFiles.includes(img.name)) matchedFiles.push(img.name);
           }
-
-          for (const [baseName, img] of imgByBaseName) {
-            if (!seen.has(img.name) && textLower.includes(baseName)) {
-              refs.push(img);
-              seen.add(img.name);
-            }
-          }
-
-          if (refs.length > 0) {
-            inlineResults.push({ promptIdx: i, refs });
-            inlineTotal += refs.length;
+          if (assets.length > 0) {
+            prompts[i].assets = assets;
+            matchedCount++;
+            inlineHits++;
           }
         }
+        if (inlineHits > 0) {
+          matchMode = `按 @引用匹配（${inlineHits}条命中）`;
+        }
+      }
 
-        if (inlineTotal > 0) {
-          matchMode = `按提示词内引用匹配（${inlineResults.length}条命中）`;
-          for (const { promptIdx, refs } of inlineResults) {
-            const assets: TaskAsset[] = [];
-            for (const img of refs) {
-              assets.push(await storeAsAsset(img));
-              if (!matchedFiles.includes(img.name)) matchedFiles.push(img.name);
-            }
-            prompts[promptIdx].assets = assets;
-            matchedCount++;
-          }
-        } else {
+      const anyAssetsSoFar = prompts.some((p) => (p.assets?.length ?? 0) > 0);
+
+      // Strategy 2: smart fallback matching (guarded)
+      if (imageList.length > 0 && !anyAssetsSoFar) {
+        warnings.push("未检测到 @引用，已启用自动匹配策略。建议在提示词中写 `@文件名.png` 显式引用参考图。");
+
           if (imageList.length === 1) {
             matchMode = `1图×${prompts.length}词`;
             const asset = await storeAsAsset(imageList[0]);
@@ -240,14 +211,13 @@
             matchedFiles.push(imageList[0].name);
           } else if (prompts.length === 1) {
             matchMode = `${imageList.length}图×1词`;
-            const original = prompts[0];
-            prompts.length = 0;
+            const assets: TaskAsset[] = [];
             for (const img of imageList) {
-              const asset = await storeAsAsset(img);
-              prompts.push({ prompt: original.prompt, assets: [asset] });
-              matchedCount++;
+              assets.push(await storeAsAsset(img));
               matchedFiles.push(img.name);
             }
+            prompts[0].assets = assets;
+            matchedCount++;
           } else if (imageList.length === prompts.length) {
             matchMode = `${imageList.length}图×${prompts.length}词 顺序匹配`;
             for (let i = 0; i < prompts.length; i++) {
@@ -264,13 +234,21 @@
             for (const p of originalPrompts) {
               for (const img of imageList) {
                 const asset = await storeAsAsset(img);
-                prompts.push({ prompt: p.prompt, filename: p.filename, assets: [asset] });
+                prompts.push({ prompt: p.prompt, assets: [asset] });
                 matchedCount++;
                 usedFiles.add(img.name);
               }
             }
             matchedFiles.push(...usedFiles);
           }
+      }
+
+      // Unused images guardrail.
+      if (imageList.length > 0 && matchedFiles.length > 0) {
+        const used = new Set(matchedFiles.map((n) => n.toLowerCase()));
+        const unused = imageList.filter((img) => !used.has(img.name.toLowerCase()));
+        if (unused.length > 0) {
+          warnings.push(`以下图片未被使用：${unused.map((x) => x.name).join("、")}`);
         }
       }
 
@@ -280,6 +258,7 @@
         matchedCount,
         promptCount: prompts.length,
         matchedFiles,
+        warnings,
       };
 
       folderImportStatus = `${matchMode} · ${matchedCount}/${prompts.length}，入队中...`;

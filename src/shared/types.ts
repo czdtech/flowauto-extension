@@ -12,9 +12,7 @@ export type GenerationMode =
   | "camera-motion"
   | "camera-control";
 
-export type VeoModel =
-  | "veo3.1-fast"
-  | "veo3.1-quality";
+export type VeoModel = "veo3.1-fast" | "veo3.1-quality";
 export type ImageModel = "nano-banana-2" | "nano-banana-pro" | "imagen4";
 export type AnyModel = VeoModel | ImageModel;
 
@@ -120,7 +118,7 @@ export const DEFAULT_QUEUE_STATE: QueueState = {
 };
 
 export interface ParsedPromptItem {
-  filename?: string;
   prompt: string;
+  inlineRefs?: string[];
   assets?: TaskAsset[];
 }

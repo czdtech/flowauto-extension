@@ -7,6 +7,7 @@
     matchedCount: number;
     promptCount: number;
     matchedFiles: string[];
+    warnings?: string[];
   }
   
   interface Props {
@@ -57,7 +58,7 @@
     rows="7"
     value={promptText}
     oninput={(e) => onUpdatePrompt((e.target as HTMLTextAreaElement).value)}
-    placeholder={"每行一个 prompt；或用空行分隔多行 prompt。\\n支持：文件名, prompt"}
+    placeholder={"每行一个 prompt；或用空行分隔多行 prompt。\n在提示词中写 @文件名.png 可绑定参考图（支持多张）"}
   ></textarea>
   <input type="file" accept=".txt" class="hidden-file" bind:this={fileInput}
     onchange={handleFileImport} />
@@ -75,7 +76,7 @@
     </button>
   </div>
   <div class="import-hint">
-    Ctrl+点击 同时选中 .txt 和图片文件。提示词中直接写图片文件名可引用多张参考图；也支持 1图N词、N图1词、M×N 等自动匹配。
+    Ctrl+点击 同时选中 .txt 和图片文件。在提示词中用 `@文件名.png` 显式引用参考图（支持多张）；未检测到 @引用时将启用 1图N词、N图1词、顺序匹配、M×N 自动匹配。
   </div>
 {/if}
 
@@ -90,6 +91,13 @@
       <span>🖼️ 图片: {importSummary.imgCount}</span>
       <span>✅ 匹配: {importSummary.matchedCount}/{importSummary.promptCount}</span>
     </div>
+    {#if importSummary.warnings && importSummary.warnings.length > 0}
+      <div class="warn-list">
+        {#each importSummary.warnings as w}
+          <div class="warn-item">⚠️ {w}</div>
+        {/each}
+      </div>
+    {/if}
     {#if importSummary.matchedFiles.length > 0}
       <div class="matched-list">
         {#each importSummary.matchedFiles as f}
@@ -174,6 +182,20 @@
     background: rgba(126, 231, 135, 0.06);
     border: 1px solid rgba(126, 231, 135, 0.20);
     font-size: 12px;
+  }
+  .warn-list {
+    margin-top: 6px;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgba(246, 211, 101, 0.06);
+    border: 1px solid rgba(246, 211, 101, 0.20);
+  }
+  .warn-item {
+    font-size: 11px;
+    line-height: 1.35;
+    opacity: 0.9;
+    word-break: break-word;
   }
   .summary-row {
     display: flex;

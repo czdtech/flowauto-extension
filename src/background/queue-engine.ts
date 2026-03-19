@@ -1,6 +1,6 @@
-import { resolveCapabilities } from '../shared/capability-guard';
-import { LIMITS } from '../shared/config';
-import { logger } from '../shared/logger';
+import { resolveCapabilities } from "../shared/capability-guard";
+import { LIMITS } from "../shared/config";
+import { logger } from "../shared/logger";
 import {
   DEFAULT_QUEUE_STATE,
   DEFAULT_SETTINGS,
@@ -10,9 +10,9 @@ import {
   type TaskItem,
   type TaskLogEntry,
   type UserSettings,
-} from '../shared/types';
-import { storageGet, storageSet } from './storage';
-import { deleteImageBlobs, clearAllImageBlobs } from '../shared/image-store';
+} from "../shared/types";
+import { storageGet, storageSet } from "./storage";
+import { deleteImageBlobs, clearAllImageBlobs } from "../shared/image-store";
 
 /** Collect all asset refIds from a list of tasks. */
 function collectAssetRefIds(tasks: TaskItem[]): string[] {
@@ -26,8 +26,8 @@ function collectAssetRefIds(tasks: TaskItem[]): string[] {
 }
 
 const STORAGE_KEYS = {
-  queue: 'flowauto.queueState.v1',
-  settings: 'flowauto.settings.v1',
+  queue: "flowauto.queueState.v1",
+  settings: "flowauto.settings.v1",
 } as const;
 
 let initialized = false;
@@ -42,7 +42,6 @@ function makeId(): string {
   // Avoid relying on crypto.randomUUID availability across all extension contexts.
   return `t_${now()}_${Math.random().toString(16).slice(2)}`;
 }
-
 
 async function persist(): Promise<void> {
   await storageSet(STORAGE_KEYS.queue, queue);
@@ -60,28 +59,42 @@ export async function ensureInitialized(): Promise<void> {
   if (storedSettings) settings = { ...DEFAULT_SETTINGS, ...storedSettings };
 }
 
-export async function getAppState(): Promise<{ queue: QueueState; settings: UserSettings }> {
+export async function getAppState(): Promise<{
+  queue: QueueState;
+  settings: UserSettings;
+}> {
   await ensureInitialized();
   return { queue, settings };
 }
 
-export async function clearQueue(): Promise<{ queue: QueueState; settings: UserSettings }> {
+export async function clearQueue(): Promise<{
+  queue: QueueState;
+  settings: UserSettings;
+}> {
   await ensureInitialized();
   // GC: clean up all image blobs since we're wiping everything.
-  void clearAllImageBlobs().catch(e => logger.warn("clearAllImageBlobs failed", e));
+  void clearAllImageBlobs().catch((e) =>
+    logger.warn("clearAllImageBlobs failed", e),
+  );
   queue = structuredClone(DEFAULT_QUEUE_STATE);
   await persist();
   return { queue, settings };
 }
 
 /** Remove only finished tasks (success / error / skipped). Waiting/running tasks are kept. */
-export async function clearHistory(): Promise<{ queue: QueueState; settings: UserSettings }> {
+export async function clearHistory(): Promise<{
+  queue: QueueState;
+  settings: UserSettings;
+}> {
   await ensureInitialized();
-  const DONE: Set<string> = new Set(['success', 'error', 'skipped']);
+  const DONE: Set<string> = new Set(["success", "error", "skipped"]);
   const removed = queue.tasks.filter((t) => DONE.has(t.status));
   // GC: clean up image blobs from removed tasks.
   const refIds = collectAssetRefIds(removed);
-  if (refIds.length) void deleteImageBlobs(refIds).catch(e => logger.warn("deleteImageBlobs failed", e));
+  if (refIds.length)
+    void deleteImageBlobs(refIds).catch((e) =>
+      logger.warn("deleteImageBlobs failed", e),
+    );
   queue = {
     ...queue,
     tasks: queue.tasks.filter((t) => !DONE.has(t.status)),
@@ -92,7 +105,7 @@ export async function clearHistory(): Promise<{ queue: QueueState; settings: Use
 
 export async function addPrompts(
   prompts: ParsedPromptItem[],
-  modeOverride?: import('../shared/types').GenerationMode,
+  modeOverride?: import("../shared/types").GenerationMode,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
 
@@ -102,25 +115,24 @@ export async function addPrompts(
 
     const task: TaskItem = {
       id: makeId(),
-      filename: p.filename,
       prompt: p.prompt,
       mode,
       model,
       aspectRatio: settings.defaultAspectRatio,
       outputCount: settings.defaultOutputCount,
-      status: 'waiting',
+      status: "waiting",
       retries: 0,
-      maxRetries: 0,  // No auto-retry; user can manually retry via "重试失败项"
+      maxRetries: 0, // No auto-retry; user can manually retry via "重试失败项"
       createdAt: now(),
       downloadResolution: settings.defaultDownloadResolution,
-      logs: [{ ts: now(), msg: '任务已创建入队' }],
+      logs: [{ ts: now(), msg: "任务已创建入队" }],
       assets: p.assets,
     };
 
     const cap = resolveCapabilities(task);
     if (!cap.valid) {
-      task.status = 'skipped';
-      task.errorMessage = cap.reason ?? 'Capability guard rejected';
+      task.status = "skipped";
+      task.errorMessage = cap.reason ?? "Capability guard rejected";
       task.completedAt = now();
       return task;
     }
@@ -139,7 +151,7 @@ export async function addPrompts(
 }
 
 export async function setRunning(
-  isRunning: boolean
+  isRunning: boolean,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = { ...queue, isRunning };
@@ -148,14 +160,17 @@ export async function setRunning(
 }
 
 export async function removeTask(
-  taskId: string
+  taskId: string,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   // GC: clean up image blobs from the removed task.
   const removed = queue.tasks.find((t) => t.id === taskId);
   if (removed) {
     const refIds = collectAssetRefIds([removed]);
-    if (refIds.length) void deleteImageBlobs(refIds).catch(e => logger.warn("deleteImageBlobs failed", e));
+    if (refIds.length)
+      void deleteImageBlobs(refIds).catch((e) =>
+        logger.warn("deleteImageBlobs failed", e),
+      );
   }
   queue = {
     ...queue,
@@ -171,7 +186,7 @@ export async function removeTask(
 
 export async function skipTask(
   taskId: string,
-  reason = 'skipped by user'
+  reason = "skipped by user",
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = {
@@ -180,7 +195,7 @@ export async function skipTask(
       if (t.id !== taskId) return t;
       return {
         ...t,
-        status: 'skipped',
+        status: "skipped",
         errorMessage: t.errorMessage ?? reason,
         completedAt: now(),
       };
@@ -190,15 +205,18 @@ export async function skipTask(
   return { queue, settings };
 }
 
-export async function retryErrors(): Promise<{ queue: QueueState; settings: UserSettings }> {
+export async function retryErrors(): Promise<{
+  queue: QueueState;
+  settings: UserSettings;
+}> {
   await ensureInitialized();
   queue = {
     ...queue,
     tasks: queue.tasks.map((t) => {
-      if (t.status !== 'error') return t;
+      if (t.status !== "error") return t;
       return {
         ...t,
-        status: 'waiting',
+        status: "waiting",
         errorMessage: undefined,
         startedAt: undefined,
         completedAt: undefined,
@@ -210,7 +228,7 @@ export async function retryErrors(): Promise<{ queue: QueueState; settings: User
 }
 
 export async function updateSettings(
-  patch: Partial<UserSettings>
+  patch: Partial<UserSettings>,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   settings = { ...settings, ...patch };
@@ -220,17 +238,24 @@ export async function updateSettings(
 
 export async function getNextWaitingTask(): Promise<TaskItem | undefined> {
   await ensureInitialized();
-  return queue.tasks.find((t) => t.status === 'waiting');
+  return queue.tasks.find((t) => t.status === "waiting");
 }
 
-export async function markTaskRunning(taskId: string): Promise<{ queue: QueueState; settings: UserSettings }> {
+export async function markTaskRunning(
+  taskId: string,
+): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = {
     ...queue,
     currentTaskId: taskId,
     tasks: queue.tasks.map((t) => {
       if (t.id !== taskId) return t;
-      return { ...t, status: 'running', startedAt: now(), errorMessage: undefined };
+      return {
+        ...t,
+        status: "running",
+        startedAt: now(),
+        errorMessage: undefined,
+      };
     }),
   };
   await persist();
@@ -238,7 +263,7 @@ export async function markTaskRunning(taskId: string): Promise<{ queue: QueueSta
 }
 
 export async function markTaskSuccess(
-  taskId: string
+  taskId: string,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = {
@@ -246,7 +271,7 @@ export async function markTaskSuccess(
     currentTaskId: undefined,
     tasks: queue.tasks.map((t) => {
       if (t.id !== taskId) return t;
-      return { ...t, status: 'success', completedAt: now() };
+      return { ...t, status: "success", completedAt: now() };
     }),
   };
   await persist();
@@ -255,7 +280,7 @@ export async function markTaskSuccess(
 
 export async function markTaskError(
   taskId: string,
-  errorMessage: string
+  errorMessage: string,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = {
@@ -268,8 +293,10 @@ export async function markTaskError(
       return {
         ...t,
         retries,
-        status: shouldRetry ? 'waiting' : 'error',
-        errorMessage: shouldRetry ? `(重试 ${retries}/${t.maxRetries}) ${errorMessage}` : errorMessage,
+        status: shouldRetry ? "waiting" : "error",
+        errorMessage: shouldRetry
+          ? `(重试 ${retries}/${t.maxRetries}) ${errorMessage}`
+          : errorMessage,
       };
     }),
   };
@@ -277,8 +304,10 @@ export async function markTaskError(
   return { queue, settings };
 }
 
-
-export async function appendTaskLog(taskId: string, msg: string): Promise<void> {
+export async function appendTaskLog(
+  taskId: string,
+  msg: string,
+): Promise<void> {
   await ensureInitialized();
   const entry: TaskLogEntry = { ts: now(), msg };
   queue = {
@@ -291,4 +320,3 @@ export async function appendTaskLog(taskId: string, msg: string): Promise<void> 
   };
   await persist();
 }
-
