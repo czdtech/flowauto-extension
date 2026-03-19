@@ -154,6 +154,41 @@ export type GetImageBlobResponse = {
   mimeType?: string;
 };
 
+export type AiEnhanceRequest = {
+  type: typeof MSG.AI_ENHANCE;
+  prompt: string;
+};
+
+export type AiEnhanceResponse = {
+  ok: boolean;
+  enhanced?: string;
+  error?: string;
+};
+
+export type AiRewriteRequest = {
+  type: typeof MSG.AI_REWRITE;
+  prompt: string;
+  errorMessage: string;
+};
+
+export type AiRewriteResponse = {
+  ok: boolean;
+  rewritten?: string;
+  error?: string;
+};
+
+export type AiVariantsRequest = {
+  type: typeof MSG.AI_VARIANTS;
+  prompt: string;
+  count: number;
+};
+
+export type AiVariantsResponse = {
+  ok: boolean;
+  variants?: string[];
+  error?: string;
+};
+
 export type QueueStateResponse = {
   type: typeof MSG.QUEUE_STATE;
   queue: QueueState;
@@ -181,7 +216,10 @@ export type AnyRequest =
   | RefMediaUpsertRequest
   | ExpectDownloadRequest
   | DownloadByUrlRequest
-  | GetImageBlobRequest;
+  | GetImageBlobRequest
+  | AiEnhanceRequest
+  | AiRewriteRequest
+  | AiVariantsRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -193,4 +231,7 @@ export type AnyResponse =
   | RefMediaUpsertResponse
   | ExpectDownloadResponse
   | DownloadByUrlResponse
-  | GetImageBlobResponse;
+  | GetImageBlobResponse
+  | AiEnhanceResponse
+  | AiRewriteResponse
+  | AiVariantsResponse;

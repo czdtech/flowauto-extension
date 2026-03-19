@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { UserSettings } from '../../shared/types';
-  
+  import type { AiProviderType } from '../../shared/ai-provider';
+
   interface Props {
     settings: UserSettings | null;
     s_defaultModel: UserSettings['defaultModel'];
@@ -9,10 +10,13 @@
     s_defaultOutputCount: number;
     s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'];
     s_interTaskDelayMs: number;
+    s_aiProvider: AiProviderType;
+    s_aiApiKey: string;
+    s_aiModel: string;
     patchSettings: (patch: Partial<UserSettings>) => void;
   }
-  
-  let { 
+
+  let {
     settings,
     s_defaultModel = $bindable(),
     s_defaultGenerationType = $bindable(),
@@ -20,8 +24,18 @@
     s_defaultOutputCount = $bindable(),
     s_defaultDownloadResolution = $bindable(),
     s_interTaskDelayMs = $bindable(),
+    s_aiProvider = $bindable(),
+    s_aiApiKey = $bindable(),
+    s_aiModel = $bindable(),
     patchSettings
   }: Props = $props();
+
+  function patchAi(patch: Partial<{ provider: AiProviderType; apiKey: string; model: string }>): void {
+    const current = settings?.aiSettings ?? { provider: s_aiProvider, apiKey: s_aiApiKey, model: s_aiModel };
+    patchSettings({
+      aiSettings: { ...current, ...patch },
+    });
+  }
 </script>
 
 {#if settings}
@@ -113,6 +127,51 @@
       </label>
     </div>
   </details>
+
+  <details class="settings">
+    <summary>AI 设置</summary>
+    <div class="grid">
+      <label>
+        <div class="lab">AI 服务商</div>
+        <select
+          class="sel"
+          bind:value={s_aiProvider}
+          onchange={(e) => patchAi({ provider: (e.target as HTMLSelectElement).value as AiProviderType })}
+        >
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </label>
+
+      <label>
+        <div class="lab">模型</div>
+        <select
+          class="sel"
+          bind:value={s_aiModel}
+          onchange={(e) => patchAi({ model: (e.target as HTMLSelectElement).value })}
+        >
+          {#if s_aiProvider === 'openai'}
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+            <option value="gpt-4o">gpt-4o</option>
+          {:else}
+            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+            <option value="gemini-2.5-pro-preview-05-06">gemini-2.5-pro</option>
+          {/if}
+        </select>
+      </label>
+
+      <label class="full-width">
+        <div class="lab">API Key</div>
+        <input
+          class="inp"
+          type="password"
+          placeholder="输入 API Key"
+          bind:value={s_aiApiKey}
+          onchange={(e) => patchAi({ apiKey: (e.target as HTMLInputElement).value })}
+        />
+      </label>
+    </div>
+  </details>
 {/if}
 
 <style>
@@ -155,5 +214,8 @@
   .sel:focus,
   .inp:focus {
     border-color: rgba(126, 231, 135, 0.45);
+  }
+  .full-width {
+    grid-column: 1 / -1;
   }
 </style>

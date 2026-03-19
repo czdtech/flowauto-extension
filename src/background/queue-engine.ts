@@ -320,3 +320,26 @@ export async function appendTaskLog(
   };
   await persist();
 }
+
+/** Reset a failed task with a new prompt for retry (used by AI auto-rewrite). */
+export async function resetTaskForRetry(
+  taskId: string,
+  newPrompt: string,
+): Promise<void> {
+  await ensureInitialized();
+  queue = {
+    ...queue,
+    tasks: queue.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        prompt: newPrompt,
+        status: "waiting" as const,
+        errorMessage: undefined,
+        startedAt: undefined,
+        completedAt: undefined,
+      };
+    }),
+  };
+  await persist();
+}

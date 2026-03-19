@@ -1,18 +1,20 @@
 import { MSG } from '../shared/constants';
 import type { ExecuteTaskRequest, TaskResultResponse } from '../shared/protocol';
 import { sleep } from '../shared/sleep';
-import { errorMsg } from '../shared/logger';
+import { errorMsg, logger } from '../shared/logger';
 import {
   getAppState,
   getNextWaitingTask,
   markTaskError,
   markTaskRunning,
   markTaskSuccess,
+  resetTaskForRetry,
   setRunning,
 } from './queue-engine';
 import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
 import { TIMEOUTS } from '../shared/config';
+import { createAiProvider } from './ai-providers';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -61,6 +63,33 @@ function getTabById(tabId: number): Promise<chrome.tabs.Tab | undefined> {
 }
 
 let loopActive = false;
+
+/** Track tasks that have already been auto-rewritten (one attempt only). */
+const rewrittenTasks = new Set<string>();
+
+function isPolicyViolation(errorMessage: string): boolean {
+  return /内容策略|policy/i.test(errorMessage);
+}
+
+async function tryAutoRewrite(taskId: string, originalPrompt: string, errorMessage: string): Promise<void> {
+  if (!isPolicyViolation(errorMessage)) return;
+  if (rewrittenTasks.has(taskId)) return; // Only one rewrite attempt per task
+
+  const { settings } = await getAppState();
+  const aiSettings = settings.aiSettings;
+  if (!aiSettings?.apiKey) return;
+
+  try {
+    const provider = createAiProvider(aiSettings);
+    const rewritten = await provider.rewrite(originalPrompt, errorMessage);
+    logger.info(`AI 自动改写: "${originalPrompt.slice(0, 30)}..." → "${rewritten.slice(0, 30)}..."`);
+    rewrittenTasks.add(taskId);
+    await resetTaskForRetry(taskId, rewritten);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn(`AI 自动改写失败: ${msg}`);
+  }
+}
 
 export function kickRunner(): void {
   if (loopActive) return;
@@ -114,11 +143,14 @@ async function runLoop(): Promise<void> {
       if (res.ok) {
         await markTaskSuccess(next.id);
       } else {
-        await markTaskError(next.id, res.error ?? '执行失败（未知错误）');
+        const errText = res.error ?? '执行失败（未知错误）';
+        await markTaskError(next.id, errText);
+        await tryAutoRewrite(next.id, next.prompt, errText);
       }
     } catch (e: unknown) {
       const msg = errorMsg(e);
       await markTaskError(next.id, msg);
+      await tryAutoRewrite(next.id, next.prompt, msg);
     }
 
     // Inter-task delay (also gives UI time to settle).

@@ -101,6 +101,7 @@ export interface UserSettings {
   defaultOutputCount: number;
   interTaskDelayMs: number;
   defaultDownloadResolution: DownloadResolution;
+  aiSettings?: import("./ai-provider").AiSettings;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

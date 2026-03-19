@@ -27,6 +27,10 @@ export const MSG = {
   EXPECT_DOWNLOAD: "EXPECT_DOWNLOAD",
   DOWNLOAD_BY_URL: "DOWNLOAD_BY_URL",
   GET_IMAGE_BLOB: "GET_IMAGE_BLOB",
+
+  AI_ENHANCE: "AI_ENHANCE",
+  AI_REWRITE: "AI_REWRITE",
+  AI_VARIANTS: "AI_VARIANTS",
 } as const;
 
 export type MsgType = (typeof MSG)[keyof typeof MSG];

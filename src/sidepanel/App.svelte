@@ -22,8 +22,13 @@
     QueueStartRequest,
     QueueStateResponse,
     SettingsUpdateRequest,
+    AiEnhanceRequest,
+    AiEnhanceResponse,
+    AiVariantsRequest,
+    AiVariantsResponse,
   } from '../shared/protocol';
   import { modeForModel } from '../shared/types';
+  import type { AiProviderType } from '../shared/ai-provider';
   import type { GenerationMode, GenerationType, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
 
   type Status = 'checking' | 'connected' | 'disconnected';
@@ -52,6 +57,11 @@
   let s_defaultOutputCount = $state(1);
   let s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'] = $state('2K/1080p');
   let s_interTaskDelayMs = $state(5000);
+
+  let s_aiProvider: AiProviderType = $state('openai');
+  let s_aiApiKey = $state('');
+  let s_aiModel = $state('gpt-4o-mini');
+  let aiLoading = $state(false);
 
   function sendMessage<TReq, TRes>(message: TReq): Promise<TRes> {
     return new Promise((resolve, reject) => {
@@ -356,6 +366,11 @@
     s_defaultOutputCount = next.defaultOutputCount;
     s_defaultDownloadResolution = next.defaultDownloadResolution;
     s_interTaskDelayMs = next.interTaskDelayMs;
+    if (next.aiSettings) {
+      s_aiProvider = next.aiSettings.provider;
+      s_aiApiKey = next.aiSettings.apiKey;
+      s_aiModel = next.aiSettings.model;
+    }
   }
 
   async function patchSettings(patch: Partial<UserSettings>): Promise<void> {
@@ -546,6 +561,50 @@
   function dismissImportSummary() {
     importSummary = null;
   }
+
+  async function handleAiEnhance(): Promise<void> {
+    if (!promptText.trim() || aiLoading) return;
+    aiLoading = true;
+    queueError = '';
+    try {
+      const res = await sendMessage<AiEnhanceRequest, AiEnhanceResponse>({
+        type: MSG.AI_ENHANCE,
+        prompt: promptText.trim(),
+      });
+      if (res.ok && res.enhanced) {
+        promptText = res.enhanced;
+      } else {
+        queueError = res.error ?? 'AI 增强失败';
+      }
+    } catch {
+      queueError = 'AI 增强请求失败';
+    } finally {
+      aiLoading = false;
+    }
+  }
+
+  async function handleAiVariants(): Promise<void> {
+    if (!promptText.trim() || aiLoading) return;
+    aiLoading = true;
+    queueError = '';
+    try {
+      const res = await sendMessage<AiVariantsRequest, AiVariantsResponse>({
+        type: MSG.AI_VARIANTS,
+        prompt: promptText.trim(),
+        count: 3,
+      });
+      if (res.ok && res.variants?.length) {
+        const variantsText = res.variants.join('\n');
+        promptText = promptText.trim() + '\n' + variantsText;
+      } else {
+        queueError = res.error ?? '生成变体失败';
+      }
+    } catch {
+      queueError = '生成变体请求失败';
+    } finally {
+      aiLoading = false;
+    }
+  }
 </script>
 
 <main>
@@ -560,6 +619,9 @@
       bind:s_defaultOutputCount
       bind:s_defaultDownloadResolution
       bind:s_interTaskDelayMs
+      bind:s_aiProvider
+      bind:s_aiApiKey
+      bind:s_aiModel
       {patchSettings}
     />
 
@@ -580,6 +642,10 @@
       canClearHistory={!!queue && !queue.isRunning && (counts(queue).success + counts(queue).error + counts(queue).skipped) > 0}
       hasQueue={!!queue}
       onUpdatePrompt={(text) => promptText = text}
+      onAiEnhance={handleAiEnhance}
+      onAiVariants={handleAiVariants}
+      {aiLoading}
+      hasAiSettings={!!s_aiApiKey}
     />
 
     {#if queueError}
