@@ -27,6 +27,10 @@
     canClearHistory: boolean;
     hasQueue: boolean;
     onUpdatePrompt: (text: string) => void;
+    onAiEnhance: () => void;
+    onAiVariants: () => void;
+    aiLoading: boolean;
+    hasAiSettings: boolean;
   }
   
   let {
@@ -45,7 +49,11 @@
     hasError,
     canClearHistory,
     hasQueue,
-    onUpdatePrompt
+    onUpdatePrompt,
+    onAiEnhance,
+    onAiVariants,
+    aiLoading,
+    hasAiSettings
   }: Props = $props();
   
   let fileInput: HTMLInputElement | undefined = $state(undefined);
@@ -68,6 +76,17 @@
     导入
   </button>
 </div>
+
+{#if hasAiSettings}
+  <div class="ai-row">
+    <button class="btn btn-ai" onclick={onAiEnhance} disabled={aiLoading || !promptText.trim()}>
+      {aiLoading ? '处理中...' : 'AI 增强'}
+    </button>
+    <button class="btn btn-ai" onclick={onAiVariants} disabled={aiLoading || !promptText.trim()}>
+      {aiLoading ? '处理中...' : '生成变体'}
+    </button>
+  </div>
+{/if}
 
 {#if s_defaultGenerationType === 'image-to-image' || s_defaultGenerationType === 'image-to-video'}
   <div class="import-row">
@@ -296,5 +315,20 @@
     padding-left: 8px;
     padding-right: 8px;
     font-size: 12px;
+  }
+  .ai-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .btn-ai {
+    flex: 1;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(168, 130, 255, 0.10);
+    border-color: rgba(168, 130, 255, 0.30);
+  }
+  .btn-ai:hover {
+    background: rgba(168, 130, 255, 0.18);
   }
 </style>

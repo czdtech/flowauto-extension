@@ -104,6 +104,7 @@ export interface UserSettings {
   defaultDownloadResolution: DownloadResolution;
   stealthMode: boolean;
   chainMode: boolean;
+  aiSettings?: import("./ai-provider").AiSettings;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

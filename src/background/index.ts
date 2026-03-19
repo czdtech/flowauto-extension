@@ -2,6 +2,12 @@ import { MSG } from "../shared/constants";
 import type {
   AnyRequest,
   AnyResponse,
+  AiEnhanceRequest,
+  AiEnhanceResponse,
+  AiRewriteRequest,
+  AiRewriteResponse,
+  AiVariantsRequest,
+  AiVariantsResponse,
   DownloadByUrlRequest,
   ExpectDownloadRequest,
   ExpectDownloadResponse,
@@ -69,6 +75,7 @@ import { tryInjectContentScripts } from "./content-injection";
 import { sendMessageToTab } from "../shared/messaging";
 import { TIMEOUTS } from "../shared/config";
 import { logger } from "../shared/logger";
+import { createAiProvider } from "./ai-providers";
 
 initDownloadManager();
 
@@ -542,6 +549,58 @@ async function handleProjectSwitch(
   };
 }
 
+async function getAiSettingsFromStorage(): Promise<
+  import("../shared/ai-provider").AiSettings | undefined
+> {
+  const { settings } = await getAppState();
+  return settings.aiSettings;
+}
+
+async function handleAiEnhance(
+  req: AiEnhanceRequest,
+): Promise<AiEnhanceResponse> {
+  const aiSettings = await getAiSettingsFromStorage();
+  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  try {
+    const provider = createAiProvider(aiSettings);
+    const enhanced = await provider.enhance(req.prompt);
+    return { ok: true, enhanced };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
+}
+
+async function handleAiRewrite(
+  req: AiRewriteRequest,
+): Promise<AiRewriteResponse> {
+  const aiSettings = await getAiSettingsFromStorage();
+  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  try {
+    const provider = createAiProvider(aiSettings);
+    const rewritten = await provider.rewrite(req.prompt, req.errorMessage);
+    return { ok: true, rewritten };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
+}
+
+async function handleAiVariants(
+  req: AiVariantsRequest,
+): Promise<AiVariantsResponse> {
+  const aiSettings = await getAiSettingsFromStorage();
+  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  try {
+    const provider = createAiProvider(aiSettings);
+    const variants = await provider.variants(req.prompt, req.count);
+    return { ok: true, variants };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
@@ -551,6 +610,12 @@ async function makeErrorResponse(
     return { type: MSG.REF_MEDIA_LOOKUP, found: false };
   if (message.type === MSG.REF_MEDIA_UPSERT)
     return { type: MSG.REF_MEDIA_UPSERT, ok: false };
+  if (
+    message.type === MSG.AI_ENHANCE ||
+    message.type === MSG.AI_REWRITE ||
+    message.type === MSG.AI_VARIANTS
+  )
+    return { ok: false, error: "内部错误" };
   if (message.type === MSG.PING) {
     return {
       type: MSG.PONG,
@@ -633,6 +698,12 @@ chrome.runtime.onMessage.addListener(
           return handleProjectDelete(message as ProjectDeleteRequest);
         if (message.type === MSG.PROJECT_SWITCH)
           return handleProjectSwitch(message as ProjectSwitchRequest);
+        if (message.type === MSG.AI_ENHANCE)
+          return handleAiEnhance(message as AiEnhanceRequest);
+        if (message.type === MSG.AI_REWRITE)
+          return handleAiRewrite(message as AiRewriteRequest);
+        if (message.type === MSG.AI_VARIANTS)
+          return handleAiVariants(message as AiVariantsRequest);
         return undefined;
       } catch {
         return await makeErrorResponse(message);

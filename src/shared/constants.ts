@@ -34,6 +34,10 @@ export const MSG = {
   PROJECT_RENAME: "PROJECT_RENAME",
   PROJECT_DELETE: "PROJECT_DELETE",
   PROJECT_SWITCH: "PROJECT_SWITCH",
+
+  AI_ENHANCE: "AI_ENHANCE",
+  AI_REWRITE: "AI_REWRITE",
+  AI_VARIANTS: "AI_VARIANTS",
 } as const;
 
 export type MsgType = (typeof MSG)[keyof typeof MSG];
