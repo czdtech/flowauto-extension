@@ -1,6 +1,7 @@
 import { MSG } from "./constants";
 import type {
   GenerationMode,
+  NotificationSettings,
   ParsedPromptItem,
   Project,
   QueueState,
@@ -251,6 +252,17 @@ export type ProjectSwitchResponse = {
   activeProjectId: string;
 };
 
+export type TestNotificationRequest = {
+  type: typeof MSG.TEST_NOTIFICATION;
+  settings: NotificationSettings;
+};
+
+export type TestNotificationResponse = {
+  type: typeof MSG.TEST_NOTIFICATION;
+  ok: boolean;
+  error?: string;
+};
+
 export type AnyRequest =
   | PingRequest
   | GetPageStateRequest
@@ -280,7 +292,8 @@ export type AnyRequest =
   | ProjectSwitchRequest
   | AiEnhanceRequest
   | AiRewriteRequest
-  | AiVariantsRequest;
+  | AiVariantsRequest
+  | TestNotificationRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -300,4 +313,5 @@ export type AnyResponse =
   | ProjectSwitchResponse
   | AiEnhanceResponse
   | AiRewriteResponse
-  | AiVariantsResponse;
+  | AiVariantsResponse
+  | TestNotificationResponse;

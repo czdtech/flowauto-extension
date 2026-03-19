@@ -38,6 +38,7 @@ export const MSG = {
   AI_ENHANCE: "AI_ENHANCE",
   AI_REWRITE: "AI_REWRITE",
   AI_VARIANTS: "AI_VARIANTS",
+  TEST_NOTIFICATION: "TEST_NOTIFICATION",
 } as const;
 
 export type MsgType = (typeof MSG)[keyof typeof MSG];

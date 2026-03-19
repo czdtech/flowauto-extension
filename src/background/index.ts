@@ -45,6 +45,8 @@ import type {
   RefMediaLookupResponse,
   RefMediaUpsertRequest,
   RefMediaUpsertResponse,
+  TestNotificationRequest,
+  TestNotificationResponse,
 } from "../shared/protocol";
 import { getImageAsBase64 } from "../shared/image-store";
 import {
@@ -76,6 +78,7 @@ import { sendMessageToTab } from "../shared/messaging";
 import { TIMEOUTS } from "../shared/config";
 import { logger } from "../shared/logger";
 import { createAiProvider } from "./ai-providers";
+import { sendNotification } from "./notifier";
 
 initDownloadManager();
 
@@ -601,6 +604,18 @@ async function handleAiVariants(
   }
 }
 
+async function handleTestNotification(
+  req: TestNotificationRequest,
+): Promise<TestNotificationResponse> {
+  try {
+    await sendNotification(req.settings, '\u{1F514} FlowAuto 测试通知 - 配置成功！');
+    return { type: MSG.TEST_NOTIFICATION, ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { type: MSG.TEST_NOTIFICATION, ok: false, error: msg };
+  }
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
@@ -704,6 +719,8 @@ chrome.runtime.onMessage.addListener(
           return handleAiRewrite(message as AiRewriteRequest);
         if (message.type === MSG.AI_VARIANTS)
           return handleAiVariants(message as AiVariantsRequest);
+        if (message.type === MSG.TEST_NOTIFICATION)
+          return handleTestNotification(message as TestNotificationRequest);
         return undefined;
       } catch {
         return await makeErrorResponse(message);

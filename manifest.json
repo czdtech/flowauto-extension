@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Automate Google Flow (DOM-first) with a side panel queue.",
   "permissions": ["storage", "downloads", "tabs", "activeTab", "sidePanel", "scripting"],
-  "host_permissions": ["https://labs.google/*"],
+  "host_permissions": ["https://labs.google/*", "https://api.telegram.org/*", "https://discord.com/api/webhooks/*"],
   "action": {
     "default_title": "FlowAuto"
   },

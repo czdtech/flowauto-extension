@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { UserSettings } from '../../shared/types';
   import type { AiProviderType } from '../../shared/ai-provider';
+  import type { NotificationProvider, NotificationSettings } from '../../shared/types';
+  import { DEFAULT_NOTIFICATION_SETTINGS } from '../../shared/types';
+  import { MSG } from '../../shared/constants';
+  import type { TestNotificationRequest, TestNotificationResponse } from '../../shared/protocol';
 
   interface Props {
     settings: UserSettings | null;
@@ -39,6 +43,70 @@
     patchSettings({
       aiSettings: { ...current, ...patch },
     });
+  }
+
+  // Notification settings local state
+  let nProvider: NotificationProvider = $state('none');
+  let nTelegramBotToken = $state('');
+  let nTelegramChatId = $state('');
+  let nDiscordWebhookUrl = $state('');
+  let nNotifyOnComplete = $state(true);
+  let nNotifyOnError = $state(true);
+  let testStatus: '' | 'sending' | 'ok' | 'error' = $state('');
+  let testError = $state('');
+
+  $effect(() => {
+    if (!settings) return;
+    const ns = settings.notificationSettings ?? DEFAULT_NOTIFICATION_SETTINGS;
+    nProvider = ns.provider;
+    nTelegramBotToken = ns.telegramBotToken ?? '';
+    nTelegramChatId = ns.telegramChatId ?? '';
+    nDiscordWebhookUrl = ns.discordWebhookUrl ?? '';
+    nNotifyOnComplete = ns.notifyOnComplete;
+    nNotifyOnError = ns.notifyOnError;
+  });
+
+  function buildNotificationSettings(): NotificationSettings {
+    return {
+      provider: nProvider,
+      telegramBotToken: nTelegramBotToken || undefined,
+      telegramChatId: nTelegramChatId || undefined,
+      discordWebhookUrl: nDiscordWebhookUrl || undefined,
+      notifyOnComplete: nNotifyOnComplete,
+      notifyOnError: nNotifyOnError,
+    };
+  }
+
+  function saveNotificationSettings(): void {
+    patchSettings({ notificationSettings: buildNotificationSettings() });
+  }
+
+  async function testNotification(): Promise<void> {
+    testStatus = 'sending';
+    testError = '';
+    try {
+      const res = await new Promise<TestNotificationResponse>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { type: MSG.TEST_NOTIFICATION, settings: buildNotificationSettings() } satisfies TestNotificationRequest,
+          (response: TestNotificationResponse) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            resolve(response);
+          },
+        );
+      });
+      if (res.ok) {
+        testStatus = 'ok';
+      } else {
+        testStatus = 'error';
+        testError = res.error ?? '未知错误';
+      }
+    } catch (e) {
+      testStatus = 'error';
+      testError = e instanceof Error ? e.message : String(e);
+    }
   }
 </script>
 
@@ -194,6 +262,70 @@
       </label>
     </div>
   </details>
+
+  <details class="settings">
+    <summary>通知设置</summary>
+    <div class="grid">
+      <label>
+        <div class="lab">通知方式</div>
+        <select
+          class="sel"
+          bind:value={nProvider}
+          onchange={() => saveNotificationSettings()}
+        >
+          <option value="none">无</option>
+          <option value="telegram">Telegram</option>
+          <option value="discord">Discord</option>
+        </select>
+      </label>
+
+      {#if nProvider === 'telegram'}
+        <label class="full-width">
+          <div class="lab">Bot Token</div>
+          <input class="inp" type="password" placeholder="输入 Bot Token"
+            bind:value={nTelegramBotToken}
+            onchange={() => saveNotificationSettings()} />
+        </label>
+        <label class="full-width">
+          <div class="lab">Chat ID</div>
+          <input class="inp" type="text" placeholder="输入 Chat ID"
+            bind:value={nTelegramChatId}
+            onchange={() => saveNotificationSettings()} />
+        </label>
+      {/if}
+
+      {#if nProvider === 'discord'}
+        <label class="full-width">
+          <div class="lab">Webhook URL</div>
+          <input class="inp" type="password" placeholder="输入 Discord Webhook URL"
+            bind:value={nDiscordWebhookUrl}
+            onchange={() => saveNotificationSettings()} />
+        </label>
+      {/if}
+
+      {#if nProvider !== 'none'}
+        <label class="toggle-row">
+          <div class="lab">队列完成时通知</div>
+          <input type="checkbox" bind:checked={nNotifyOnComplete}
+            onchange={() => saveNotificationSettings()} />
+        </label>
+        <label class="toggle-row">
+          <div class="lab">任务失败时通知</div>
+          <input type="checkbox" bind:checked={nNotifyOnError}
+            onchange={() => saveNotificationSettings()} />
+        </label>
+        <button class="test-btn" onclick={testNotification} disabled={testStatus === 'sending'}>
+          {testStatus === 'sending' ? '发送中...' : '测试通知'}
+        </button>
+        {#if testStatus === 'ok'}
+          <span class="test-ok">发送成功</span>
+        {/if}
+        {#if testStatus === 'error'}
+          <span class="test-err">{testError}</span>
+        {/if}
+      {/if}
+    </div>
+  </details>
 {/if}
 
 <style>
@@ -251,4 +383,16 @@
   .full-width {
     grid-column: 1 / -1;
   }
+  .test-btn {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .test-btn:disabled { opacity: 0.5; cursor: default; }
+  .test-ok { color: rgba(126, 231, 135, 0.9); font-size: 11px; }
+  .test-err { color: rgba(255, 100, 100, 0.9); font-size: 11px; }
 </style>

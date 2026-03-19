@@ -16,6 +16,11 @@ import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
 import { TIMEOUTS, STEALTH } from '../shared/config';
 import { createAiProvider } from './ai-providers';
+import {
+  trySendNotification,
+  formatQueueCompleteMessage,
+  formatTaskErrorMessage,
+} from './notifier';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -109,15 +114,23 @@ async function runLoop(): Promise<void> {
   // This allows the user to switch to other tabs without breaking execution.
   let lockedTabId: number | undefined;
 
+  const startedAt = Date.now();
+  let successCount = 0;
+  let errorCount = 0;
+  let projectName = '';
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const { queue, settings } = await getAppState();
-    if (!queue.isRunning) return;
+    if (!queue.isRunning) break;
+
+    // Capture project name from queue state (may be set by user).
+    if (queue.projectName) projectName = queue.projectName;
 
     const next = await getNextWaitingTask();
     if (!next) {
       await setRunning(false);
-      return;
+      break;
     }
 
     await markTaskRunning(next.id);
@@ -125,13 +138,18 @@ async function runLoop(): Promise<void> {
     // Re-verify the locked tab before each task (it may have been closed or navigated away).
     const tab = await resolveFlowTab(lockedTabId);
     if (!tab?.id) {
-      await markTaskError(next.id, '未找到可用的 Flow 项目页（请切到 Flow 项目页标签后重试）');
+      const tabError = '未找到可用的 Flow 项目页（请切到 Flow 项目页标签后重试）';
+      await markTaskError(next.id, tabError);
+      errorCount++;
       await setRunning(false);
-      return;
+      break;
     }
 
     // Lock onto this tab for all subsequent tasks in this loop.
     lockedTabId = tab.id;
+
+    let taskFailed = false;
+    let taskErrorMsg = '';
 
     try {
       await tryInjectContentScripts(tab.id);
@@ -148,6 +166,7 @@ async function runLoop(): Promise<void> {
 
       if (res.ok) {
         await markTaskSuccess(next.id);
+        successCount++;
 
         // Chain propagation: pass captured ref to the next waiting task.
         if (settings.chainMode && res.chainCapturedRefId) {
@@ -160,14 +179,24 @@ async function runLoop(): Promise<void> {
           logger.warn('Chain: failed to capture result, next task will run without chain reference');
         }
       } else {
-        const errText = res.error ?? '执行失败（未知错误）';
-        await markTaskError(next.id, errText);
-        await tryAutoRewrite(next.id, next.prompt, errText);
+        taskErrorMsg = res.error ?? '执行失败（未知错误）';
+        await markTaskError(next.id, taskErrorMsg);
+        errorCount++;
+        taskFailed = true;
+        await tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
       }
     } catch (e: unknown) {
-      const msg = errorMsg(e);
-      await markTaskError(next.id, msg);
-      await tryAutoRewrite(next.id, next.prompt, msg);
+      taskErrorMsg = errorMsg(e);
+      await markTaskError(next.id, taskErrorMsg);
+      errorCount++;
+      taskFailed = true;
+      await tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
+    }
+
+    // Immediate error notification
+    if (taskFailed && settings.notificationSettings?.notifyOnError) {
+      const msg = formatTaskErrorMessage(next.prompt, taskErrorMsg);
+      void trySendNotification(settings.notificationSettings, msg);
     }
 
     // Inter-task delay with optional stealth multiplier.
@@ -177,6 +206,15 @@ async function runLoop(): Promise<void> {
       : baseDelay;
     await sleep(delay);
   }
+
+  // Queue completion notification
+  const elapsed = Date.now() - startedAt;
+  const totalProcessed = successCount + errorCount;
+  if (totalProcessed > 0) {
+    const { settings } = await getAppState();
+    if (settings.notificationSettings?.notifyOnComplete) {
+      const msg = formatQueueCompleteMessage(projectName, successCount, errorCount, elapsed);
+      void trySendNotification(settings.notificationSettings, msg);
+    }
+  }
 }
-
-
