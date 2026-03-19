@@ -1,5 +1,5 @@
 import { MSG } from "../../shared/constants";
-import { TIMING, TIMEOUTS, LIMITS } from "../../shared/config";
+import { TIMING, TIMEOUTS, LIMITS, STEALTH } from "../../shared/config";
 import { taskLog, logger, errorMsg } from "../../shared/logger";
 import type {
   RefMediaLookupRequest,
@@ -21,9 +21,10 @@ import { clearAttachedReferences, injectImageToFlow } from "./inject-image";
 import { setPromptText } from "./prompt";
 import { setAspectRatio, setMode, setModel, setOutputCount } from "./settings";
 import { getProjectName } from "../page-state";
-import { randomSleep } from "../utils/dom";
+import { randomSleep, stealthRandomSleep } from "../utils/dom";
 import { selectTab } from "./navigate";
 import { findPromptInput } from "../finders";
+import { saveImageBlob, deleteImageBlob } from "../../shared/image-store";
 
 // In-memory blob cache keyed by refId.  Avoids repeated IndexedDB + base64
 // round-trips when the same image (same refId) is needed across tasks.
@@ -201,9 +202,43 @@ export async function resetExecutionSession(options?: {
   }
 }
 
+/**
+ * Capture the latest generation result image for chain propagation.
+ * Saves it to IndexedDB under a chain-specific key.
+ */
+async function captureChainResult(
+  _taskId: string,
+  log: (msg: string) => void,
+): Promise<string | undefined> {
+  const srcs = collectResultImageSrcs();
+  if (srcs.size === 0) return undefined;
+
+  // Pick the last (newest) result image URL.
+  const lastSrc = Array.from(srcs).pop()!;
+  try {
+    const response = await fetch(lastSrc);
+    const blob = await response.blob();
+    const chainRefId = `chain-${Date.now()}`;
+    await saveImageBlob(chainRefId, blob);
+    log(`Chain: captured result as ${chainRefId}`);
+    return chainRefId;
+  } catch (e: unknown) {
+    logger.warn("Chain capture failed:", e);
+    return undefined;
+  }
+}
+
+export interface ExecuteTaskOptions {
+  stealthMode?: boolean;
+  chainMode?: boolean;
+}
+
 export async function executeTask(
   task: TaskItem,
-): Promise<{ downloadedCount: number }> {
+  options: ExecuteTaskOptions = {},
+): Promise<{ downloadedCount: number; chainCapturedRefId?: string }> {
+  const stealth = options.stealthMode ?? false;
+  const chainMode = options.chainMode ?? false;
   const mediaType = mediaTypeForTask(task);
   const log = (msg: string) => taskLog(task.id, msg);
 
@@ -211,22 +246,28 @@ export async function executeTask(
 
   // Keep prompt area clean between tasks.
   await clearAttachedReferences();
-  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
+  await stealthRandomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX, stealth);
 
   await selectTab(mediaType === "image" ? "image" : "video");
-  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
+  await stealthRandomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX, stealth);
 
   await setMode(task.mode);
-  await randomSleep(TIMING.SHORT_MIN, TIMING.MEDIUM_MIN);
+  await stealthRandomSleep(TIMING.SHORT_MIN, TIMING.MEDIUM_MIN, stealth);
 
   await setAspectRatio(task.aspectRatio);
   await setOutputCount(task.outputCount);
   await setModel(task.model);
-  await randomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX);
+  await stealthRandomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX, stealth);
 
   log(`参数已就绪：${task.model} · ${task.aspectRatio} · x${task.outputCount}`);
+
+  // Stealth: extra pause between settings and prompt fill.
+  if (stealth) {
+    await randomSleep(STEALTH.PAUSE_MIN_MS, STEALTH.PAUSE_MAX_MS);
+  }
+
   await setPromptText(task.prompt);
-  await randomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX);
+  await stealthRandomSleep(TIMING.MEDIUM_MIN, TIMING.MEDIUM_MAX, stealth);
   log("提示词已填写");
 
   // Attach reference images.  For images that were already uploaded in this
@@ -235,6 +276,22 @@ export async function executeTask(
   if (task.assets && task.assets.length > 0) {
     const projectId = getCurrentProjectId();
     log(`参考图处理中：${task.assets.length} 张`);
+
+    // Inject chain reference first (if present).
+    if (task.chainPreviousRefId) {
+      try {
+        const chainBlob = await fetchAssetBlob(task.chainPreviousRefId);
+        log("注入链式引用图");
+        await injectImageToFlow(chainBlob, "chain-ref.png", {});
+        // Clean up chain blob from IndexedDB to avoid bloat.
+        if (task.chainPreviousRefId.startsWith("chain-")) {
+          void deleteImageBlob(task.chainPreviousRefId).catch(() => {});
+        }
+        await stealthRandomSleep(TIMING.BETWEEN_ASSETS_MIN, TIMING.BETWEEN_ASSETS_MAX, stealth);
+      } catch (e: unknown) {
+        logger.warn("Chain ref injection failed:", e);
+      }
+    }
 
     let attachedCount = 0;
     let reusedCount = 0;
@@ -296,14 +353,28 @@ export async function executeTask(
       // Allow Flow's UI to fully settle between sequential injections.
       // Without this, a rapid second paste can displace the first attachment.
       if (i < task.assets.length - 1) {
-        await randomSleep(TIMING.BETWEEN_ASSETS_MIN, TIMING.BETWEEN_ASSETS_MAX);
+        await stealthRandomSleep(TIMING.BETWEEN_ASSETS_MIN, TIMING.BETWEEN_ASSETS_MAX, stealth);
       }
     }
 
     log(
       `参考图已就绪：${attachedCount}/${task.assets.length}（复用 ${reusedCount}，上传 ${uploadedCount}）`,
     );
-    await randomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX);
+    await stealthRandomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX, stealth);
+  } else if (task.chainPreviousRefId) {
+    // No regular assets, but chain ref exists — inject it alone.
+    try {
+      const chainBlob = await fetchAssetBlob(task.chainPreviousRefId);
+      log("注入链式引用图");
+      await injectImageToFlow(chainBlob, "chain-ref.png", {});
+      // Clean up chain blob from IndexedDB to avoid bloat.
+      if (task.chainPreviousRefId.startsWith("chain-")) {
+        void deleteImageBlob(task.chainPreviousRefId).catch(() => {});
+      }
+      await stealthRandomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX, stealth);
+    } catch (e: unknown) {
+      logger.warn("Chain ref injection failed:", e);
+    }
   }
 
   const projectName = getProjectName() ?? "Flow";
@@ -315,6 +386,11 @@ export async function executeTask(
   // Preserve the baseline from the first generation round so retries can
   // detect images that loaded late (after the first round's Signal C).
   let originalBaseline: Set<string> | null = null;
+
+  // Stealth: extra pause between prompt fill and generate click.
+  if (stealth) {
+    await randomSleep(STEALTH.PAUSE_MIN_MS, STEALTH.PAUSE_MAX_MS);
+  }
 
   while (remaining > 0 && attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
     attempt++;
@@ -383,11 +459,11 @@ export async function executeTask(
             document.execCommand("insertText", false, " ");
           }
         }
-        await randomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX);
+        await stealthRandomSleep(TIMING.UI_SETTLE_MIN, TIMING.UI_SETTLE_MAX, stealth);
       } catch (e) {
         logger.warn("重试前唤醒输入框失败:", e);
       }
-      await randomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX);
+      await stealthRandomSleep(TIMING.SHORT_MIN, TIMING.SHORT_MAX, stealth);
     }
 
     let round: { newCount: number; baselineUrls: Set<string> };
@@ -401,7 +477,7 @@ export async function executeTask(
       logger.warn(`生成异常(第${attempt}次): ${msg}`);
       if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`生成异常，准备重试（还差 ${remaining}）`);
-        await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
+        await stealthRandomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX, stealth);
         continue;
       }
       throw new Error(`生成失败: ${msg}`);
@@ -415,7 +491,7 @@ export async function executeTask(
     if (produced <= 0) {
       if (attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
         log(`本轮未产出结果，准备重试（还差 ${remaining}）`);
-        await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
+        await stealthRandomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX, stealth);
         continue;
       }
       throw new Error("生成失败（无新产出）");
@@ -449,7 +525,7 @@ export async function executeTask(
 
     if (remaining > 0 && attempt < LIMITS.MAX_GENERATION_ATTEMPTS) {
       log(`结果不足，自动补生成（剩余 ${remaining}）`);
-      await randomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX);
+      await stealthRandomSleep(TIMING.RETRY_PAUSE_MIN, TIMING.RETRY_PAUSE_MAX, stealth);
     }
   }
 
@@ -460,6 +536,18 @@ export async function executeTask(
   }
 
   log(`下载完成：${downloadedTotal} 个文件`);
+
+  // Stealth: extra pause between generation complete and download.
+  if (stealth) {
+    await randomSleep(STEALTH.PAUSE_MIN_MS, STEALTH.PAUSE_MAX_MS);
+  }
+
+  // Chain capture: save the latest result for the next task's reference.
+  let chainCapturedRefId: string | undefined;
+  if (chainMode) {
+    chainCapturedRefId = await captureChainResult(task.id, log);
+  }
+
   log("任务完成");
-  return { downloadedCount: downloadedTotal };
+  return { downloadedCount: downloadedTotal, chainCapturedRefId };
 }

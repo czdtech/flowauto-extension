@@ -85,6 +85,7 @@ export interface TaskItem {
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
+  chainPreviousRefId?: string;
 }
 
 export interface QueueState {
@@ -101,6 +102,8 @@ export interface UserSettings {
   defaultOutputCount: number;
   interTaskDelayMs: number;
   defaultDownloadResolution: DownloadResolution;
+  stealthMode: boolean;
+  chainMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -110,6 +113,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultOutputCount: 1,
   interTaskDelayMs: 5000,
   defaultDownloadResolution: "2K/1080p",
+  stealthMode: false,
+  chainMode: false,
 };
 
 export const DEFAULT_QUEUE_STATE: QueueState = {

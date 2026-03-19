@@ -9,10 +9,12 @@
     s_defaultOutputCount: number;
     s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'];
     s_interTaskDelayMs: number;
+    s_stealthMode: boolean;
+    s_chainMode: boolean;
     patchSettings: (patch: Partial<UserSettings>) => void;
   }
-  
-  let { 
+
+  let {
     settings,
     s_defaultModel = $bindable(),
     s_defaultGenerationType = $bindable(),
@@ -20,6 +22,8 @@
     s_defaultOutputCount = $bindable(),
     s_defaultDownloadResolution = $bindable(),
     s_interTaskDelayMs = $bindable(),
+    s_stealthMode = $bindable(),
+    s_chainMode = $bindable(),
     patchSettings
   }: Props = $props();
 </script>
@@ -111,6 +115,24 @@
           onchange={(e) => patchSettings({ interTaskDelayMs: Number((e.target as HTMLInputElement).value) })}
         />
       </label>
+
+      <label class="toggle-row">
+        <div class="lab">隐身模式</div>
+        <input
+          type="checkbox"
+          bind:checked={s_stealthMode}
+          onchange={() => patchSettings({ stealthMode: s_stealthMode })}
+        />
+      </label>
+
+      <label class="toggle-row">
+        <div class="lab">链式模式</div>
+        <input
+          type="checkbox"
+          bind:checked={s_chainMode}
+          onchange={() => patchSettings({ chainMode: s_chainMode })}
+        />
+      </label>
     </div>
   </details>
 {/if}
@@ -132,6 +154,17 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .toggle-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: rgba(126, 231, 135, 0.8);
+    cursor: pointer;
   }
   .lab {
     opacity: 0.7;

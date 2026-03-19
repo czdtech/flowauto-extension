@@ -52,6 +52,8 @@
   let s_defaultOutputCount = $state(1);
   let s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'] = $state('2K/1080p');
   let s_interTaskDelayMs = $state(5000);
+  let s_stealthMode = $state(false);
+  let s_chainMode = $state(false);
 
   function sendMessage<TReq, TRes>(message: TReq): Promise<TRes> {
     return new Promise((resolve, reject) => {
@@ -356,6 +358,8 @@
     s_defaultOutputCount = next.defaultOutputCount;
     s_defaultDownloadResolution = next.defaultDownloadResolution;
     s_interTaskDelayMs = next.interTaskDelayMs;
+    s_stealthMode = next.stealthMode;
+    s_chainMode = next.chainMode;
   }
 
   async function patchSettings(patch: Partial<UserSettings>): Promise<void> {
@@ -560,6 +564,8 @@
       bind:s_defaultOutputCount
       bind:s_defaultDownloadResolution
       bind:s_interTaskDelayMs
+      bind:s_stealthMode
+      bind:s_chainMode
       {patchSettings}
     />
 
