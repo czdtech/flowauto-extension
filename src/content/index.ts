@@ -65,7 +65,10 @@ chrome.runtime.onMessage.addListener(
     if (message.type === MSG.EXECUTE_TASK) {
       const req = message as ExecuteTaskRequest;
       logger.info(`收到任务执行指令:`, req.task);
-      executeTask(req.task)
+      executeTask(req.task, {
+        stealthMode: req.stealthMode,
+        chainMode: req.chainMode,
+      })
         .then((result) => {
           logger.info(`任务执行成功:`, result);
           sendResponse({
@@ -73,6 +76,7 @@ chrome.runtime.onMessage.addListener(
             taskId: req.task.id,
             ok: true,
             downloadedCount: result.downloadedCount,
+            chainCapturedRefId: result.chainCapturedRefId,
           } satisfies TaskResultResponse);
         })
         .catch((err) => {

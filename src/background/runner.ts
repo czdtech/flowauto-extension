@@ -1,18 +1,19 @@
 import { MSG } from '../shared/constants';
 import type { ExecuteTaskRequest, TaskResultResponse } from '../shared/protocol';
 import { sleep } from '../shared/sleep';
-import { errorMsg } from '../shared/logger';
+import { errorMsg, logger } from '../shared/logger';
 import {
   getAppState,
   getNextWaitingTask,
   markTaskError,
   markTaskRunning,
   markTaskSuccess,
+  setChainRef,
   setRunning,
 } from './queue-engine';
 import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
-import { TIMEOUTS } from '../shared/config';
+import { TIMEOUTS, STEALTH } from '../shared/config';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -107,12 +108,28 @@ async function runLoop(): Promise<void> {
       await tryInjectContentScripts(tab.id);
       const res = await sendMessageToTab<ExecuteTaskRequest, TaskResultResponse>(
         tab.id,
-        { type: MSG.EXECUTE_TASK, task: next },
+        {
+          type: MSG.EXECUTE_TASK,
+          task: next,
+          stealthMode: settings.stealthMode,
+          chainMode: settings.chainMode,
+        },
         TIMEOUTS.TASK_EXECUTION
       );
 
       if (res.ok) {
         await markTaskSuccess(next.id);
+
+        // Chain propagation: pass captured ref to the next waiting task.
+        if (settings.chainMode && res.chainCapturedRefId) {
+          const nextTask = await getNextWaitingTask();
+          if (nextTask) {
+            await setChainRef(nextTask.id, res.chainCapturedRefId);
+            logger.info(`Chain: propagated ${res.chainCapturedRefId} → task ${nextTask.id.slice(-6)}`);
+          }
+        } else if (settings.chainMode && !res.chainCapturedRefId) {
+          logger.warn('Chain: failed to capture result, next task will run without chain reference');
+        }
       } else {
         await markTaskError(next.id, res.error ?? '执行失败（未知错误）');
       }
@@ -121,8 +138,12 @@ async function runLoop(): Promise<void> {
       await markTaskError(next.id, msg);
     }
 
-    // Inter-task delay (also gives UI time to settle).
-    await sleep(Math.max(0, settings.interTaskDelayMs));
+    // Inter-task delay with optional stealth multiplier.
+    const baseDelay = Math.max(0, settings.interTaskDelayMs);
+    const delay = settings.stealthMode
+      ? baseDelay * (STEALTH.MULTIPLIER_MIN + Math.random() * (STEALTH.MULTIPLIER_MAX - STEALTH.MULTIPLIER_MIN))
+      : baseDelay;
+    await sleep(delay);
   }
 }
 

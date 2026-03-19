@@ -72,6 +72,8 @@ export type SettingsUpdateRequest = {
 export type ExecuteTaskRequest = {
   type: typeof MSG.EXECUTE_TASK;
   task: TaskItem;
+  stealthMode: boolean;
+  chainMode: boolean;
 };
 
 export type TaskLogMessage = {
@@ -86,6 +88,7 @@ export type TaskResultResponse = {
   ok: boolean;
   error?: string;
   downloadedCount?: number;
+  chainCapturedRefId?: string;
 };
 
 export type ResetExecutionSessionRequest = {

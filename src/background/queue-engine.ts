@@ -320,3 +320,15 @@ export async function appendTaskLog(
   };
   await persist();
 }
+
+export async function setChainRef(taskId: string, refId: string): Promise<void> {
+  await ensureInitialized();
+  queue = {
+    ...queue,
+    tasks: queue.tasks.map((t) => {
+      if (t.id !== taskId) return t;
+      return { ...t, chainPreviousRefId: refId };
+    }),
+  };
+  await persist();
+}
