@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "FlowAuto",
-  "version": "0.1.0",
-  "description": "Automate Google Flow (DOM-first) with a side panel queue.",
+  "version": "1.0.0",
+  "description": "Batch automation for Google Flow — queue prompts, auto-download, chain mode, AI engine, and more.",
   "permissions": ["storage", "downloads", "tabs", "activeTab", "sidePanel", "scripting"],
   "host_permissions": ["https://labs.google/*", "https://api.telegram.org/*", "https://discord.com/api/webhooks/*"],
   "action": {
