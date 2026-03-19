@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 console.txt
-har.txt
+har.txt.worktrees
