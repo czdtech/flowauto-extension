@@ -94,6 +94,23 @@ export interface QueueState {
   projectName?: string;
 }
 
+export type NotificationProvider = 'telegram' | 'discord' | 'none';
+
+export interface NotificationSettings {
+  provider: NotificationProvider;
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  discordWebhookUrl?: string;
+  notifyOnComplete: boolean;
+  notifyOnError: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  provider: 'none',
+  notifyOnComplete: true,
+  notifyOnError: true,
+};
+
 export interface UserSettings {
   defaultModel: AnyModel;
   defaultGenerationType: GenerationType;
@@ -101,6 +118,7 @@ export interface UserSettings {
   defaultOutputCount: number;
   interTaskDelayMs: number;
   defaultDownloadResolution: DownloadResolution;
+  notificationSettings: NotificationSettings;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -110,6 +128,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultOutputCount: 1,
   interTaskDelayMs: 5000,
   defaultDownloadResolution: "2K/1080p",
+  notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
 };
 
 export const DEFAULT_QUEUE_STATE: QueueState = {

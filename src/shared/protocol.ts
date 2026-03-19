@@ -1,6 +1,7 @@
 import { MSG } from "./constants";
 import type {
   GenerationMode,
+  NotificationSettings,
   ParsedPromptItem,
   QueueState,
   TaskItem,
@@ -160,6 +161,17 @@ export type QueueStateResponse = {
   settings: UserSettings;
 };
 
+export type TestNotificationRequest = {
+  type: typeof MSG.TEST_NOTIFICATION;
+  settings: NotificationSettings;
+};
+
+export type TestNotificationResponse = {
+  type: typeof MSG.TEST_NOTIFICATION;
+  ok: boolean;
+  error?: string;
+};
+
 export type AnyRequest =
   | PingRequest
   | GetPageStateRequest
@@ -181,7 +193,8 @@ export type AnyRequest =
   | RefMediaUpsertRequest
   | ExpectDownloadRequest
   | DownloadByUrlRequest
-  | GetImageBlobRequest;
+  | GetImageBlobRequest
+  | TestNotificationRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -193,4 +206,5 @@ export type AnyResponse =
   | RefMediaUpsertResponse
   | ExpectDownloadResponse
   | DownloadByUrlResponse
-  | GetImageBlobResponse;
+  | GetImageBlobResponse
+  | TestNotificationResponse;

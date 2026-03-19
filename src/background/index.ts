@@ -29,6 +29,8 @@ import type {
   RefMediaLookupResponse,
   RefMediaUpsertRequest,
   RefMediaUpsertResponse,
+  TestNotificationRequest,
+  TestNotificationResponse,
 } from "../shared/protocol";
 import { getImageAsBase64 } from "../shared/image-store";
 import {
@@ -53,6 +55,7 @@ import { tryInjectContentScripts } from "./content-injection";
 import { sendMessageToTab } from "../shared/messaging";
 import { TIMEOUTS } from "../shared/config";
 import { logger } from "../shared/logger";
+import { sendNotification } from "./notifier";
 
 initDownloadManager();
 
@@ -475,6 +478,18 @@ async function handleRefMediaUpsert(
   return { type: MSG.REF_MEDIA_UPSERT, ok: true };
 }
 
+async function handleTestNotification(
+  req: TestNotificationRequest,
+): Promise<TestNotificationResponse> {
+  try {
+    await sendNotification(req.settings, '\u{1F514} FlowAuto 测试通知 - 配置成功！');
+    return { type: MSG.TEST_NOTIFICATION, ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { type: MSG.TEST_NOTIFICATION, ok: false, error: msg };
+  }
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
@@ -556,6 +571,8 @@ chrome.runtime.onMessage.addListener(
           return handleDownloadByUrl(message as DownloadByUrlRequest);
         if (message.type === MSG.GET_IMAGE_BLOB)
           return handleGetImageBlob(message as GetImageBlobRequest);
+        if (message.type === MSG.TEST_NOTIFICATION)
+          return handleTestNotification(message as TestNotificationRequest);
         return undefined;
       } catch {
         return await makeErrorResponse(message);
