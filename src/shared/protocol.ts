@@ -2,6 +2,7 @@ import { MSG } from "./constants";
 import type {
   GenerationMode,
   ParsedPromptItem,
+  Project,
   QueueState,
   TaskItem,
   UserSettings,
@@ -158,6 +159,58 @@ export type QueueStateResponse = {
   type: typeof MSG.QUEUE_STATE;
   queue: QueueState;
   settings: UserSettings;
+  activeProjectId?: string;
+};
+
+// ── Project management ──
+
+export type ProjectListRequest = { type: typeof MSG.PROJECT_LIST };
+export type ProjectListResponse = {
+  type: typeof MSG.PROJECT_LIST;
+  projects: Project[];
+  activeProjectId: string;
+};
+
+export type ProjectCreateRequest = {
+  type: typeof MSG.PROJECT_CREATE;
+  name: string;
+};
+export type ProjectCreateResponse = {
+  type: typeof MSG.PROJECT_CREATE;
+  project: Project;
+  projects: Project[];
+  activeProjectId: string;
+};
+
+export type ProjectRenameRequest = {
+  type: typeof MSG.PROJECT_RENAME;
+  projectId: string;
+  newName: string;
+};
+export type ProjectRenameResponse = {
+  type: typeof MSG.PROJECT_RENAME;
+  projects: Project[];
+};
+
+export type ProjectDeleteRequest = {
+  type: typeof MSG.PROJECT_DELETE;
+  projectId: string;
+};
+export type ProjectDeleteResponse = {
+  type: typeof MSG.PROJECT_DELETE;
+  projects: Project[];
+  activeProjectId: string;
+};
+
+export type ProjectSwitchRequest = {
+  type: typeof MSG.PROJECT_SWITCH;
+  projectId: string;
+};
+export type ProjectSwitchResponse = {
+  type: typeof MSG.PROJECT_SWITCH;
+  queue: QueueState;
+  settings: UserSettings;
+  activeProjectId: string;
 };
 
 export type AnyRequest =
@@ -181,7 +234,12 @@ export type AnyRequest =
   | RefMediaUpsertRequest
   | ExpectDownloadRequest
   | DownloadByUrlRequest
-  | GetImageBlobRequest;
+  | GetImageBlobRequest
+  | ProjectListRequest
+  | ProjectCreateRequest
+  | ProjectRenameRequest
+  | ProjectDeleteRequest
+  | ProjectSwitchRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -193,4 +251,9 @@ export type AnyResponse =
   | RefMediaUpsertResponse
   | ExpectDownloadResponse
   | DownloadByUrlResponse
-  | GetImageBlobResponse;
+  | GetImageBlobResponse
+  | ProjectListResponse
+  | ProjectCreateResponse
+  | ProjectRenameResponse
+  | ProjectDeleteResponse
+  | ProjectSwitchResponse;

@@ -1,20 +1,22 @@
 import { resolveCapabilities } from "../shared/capability-guard";
-import { LIMITS } from "../shared/config";
+import { LIMITS, STORAGE_KEYS, STORAGE_QUOTA_BYTES, STORAGE_QUOTA_WARN_RATIO } from "../shared/config";
 import { logger } from "../shared/logger";
 import {
   DEFAULT_QUEUE_STATE,
   DEFAULT_SETTINGS,
   modeForModel,
   type ParsedPromptItem,
+  type Project,
   type QueueState,
   type TaskItem,
   type TaskLogEntry,
   type UserSettings,
 } from "../shared/types";
-import { storageGet, storageSet } from "./storage";
+import { storageGet, storageSet, storageRemove } from "./storage";
 import { deleteImageBlobs, clearAllImageBlobs } from "../shared/image-store";
 
-/** Collect all asset refIds from a list of tasks. */
+// ── Helpers ──
+
 function collectAssetRefIds(tasks: TaskItem[]): string[] {
   const ids: string[] = [];
   for (const t of tasks) {
@@ -25,39 +27,277 @@ function collectAssetRefIds(tasks: TaskItem[]): string[] {
   return ids;
 }
 
-const STORAGE_KEYS = {
-  queue: "flowauto.queueState.v1",
-  settings: "flowauto.settings.v1",
-} as const;
-
-let initialized = false;
-let queue: QueueState = structuredClone(DEFAULT_QUEUE_STATE);
-let settings: UserSettings = structuredClone(DEFAULT_SETTINGS);
-
 function now(): number {
   return Date.now();
 }
 
-function makeId(): string {
-  // Avoid relying on crypto.randomUUID availability across all extension contexts.
-  return `t_${now()}_${Math.random().toString(16).slice(2)}`;
+function makeId(prefix = "t"): string {
+  return `${prefix}_${now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+// ── Module state ──
+
+let initialized = false;
+let projects: Project[] = [];
+let activeProjectId = "";
+let queue: QueueState = structuredClone(DEFAULT_QUEUE_STATE);
+let settings: UserSettings = structuredClone(DEFAULT_SETTINGS);
+
+// ── Storage helpers (project-scoped) ──
+
+async function persistQueue(): Promise<void> {
+  await storageSet(STORAGE_KEYS.projectQueue(activeProjectId), queue);
+}
+
+async function persistSettings(): Promise<void> {
+  await storageSet(STORAGE_KEYS.projectSettings(activeProjectId), settings);
 }
 
 async function persist(): Promise<void> {
-  await storageSet(STORAGE_KEYS.queue, queue);
-  await storageSet(STORAGE_KEYS.settings, settings);
+  await persistQueue();
+  await persistSettings();
 }
+
+async function persistProjects(): Promise<void> {
+  await storageSet(STORAGE_KEYS.PROJECTS_LIST, projects);
+}
+
+async function persistActiveProject(): Promise<void> {
+  await storageSet(STORAGE_KEYS.ACTIVE_PROJECT, activeProjectId);
+}
+
+async function loadProjectData(projectId: string): Promise<{
+  queue: QueueState;
+  settings: UserSettings;
+}> {
+  const storedQueue = await storageGet<QueueState>(
+    STORAGE_KEYS.projectQueue(projectId),
+  );
+  const storedSettings = await storageGet<UserSettings>(
+    STORAGE_KEYS.projectSettings(projectId),
+  );
+
+  const q =
+    storedQueue && Array.isArray(storedQueue.tasks)
+      ? storedQueue
+      : structuredClone(DEFAULT_QUEUE_STATE);
+  const s = storedSettings
+    ? { ...DEFAULT_SETTINGS, ...storedSettings }
+    : structuredClone(DEFAULT_SETTINGS);
+
+  return { queue: q, settings: s };
+}
+
+// ── Migration ──
+
+async function migrateFromLegacyKeys(): Promise<boolean> {
+  const legacyQueue = await storageGet<QueueState>(STORAGE_KEYS.LEGACY_QUEUE);
+  const legacySettings = await storageGet<UserSettings>(
+    STORAGE_KEYS.LEGACY_SETTINGS,
+  );
+
+  if (!legacyQueue && !legacySettings) return false;
+
+  const projectName =
+    legacyQueue?.projectName || "默认项目";
+
+  const projectId = makeId("proj");
+  const project: Project = {
+    id: projectId,
+    name: projectName,
+    createdAt: now(),
+  };
+
+  projects = [project];
+  activeProjectId = projectId;
+
+  queue = legacyQueue && Array.isArray(legacyQueue.tasks)
+    ? legacyQueue
+    : structuredClone(DEFAULT_QUEUE_STATE);
+  settings = legacySettings
+    ? { ...DEFAULT_SETTINGS, ...legacySettings }
+    : structuredClone(DEFAULT_SETTINGS);
+
+  // Write new project-scoped keys
+  await persistProjects();
+  await persistActiveProject();
+  await persist();
+
+  // Delete old keys
+  await storageRemove(STORAGE_KEYS.LEGACY_QUEUE);
+  await storageRemove(STORAGE_KEYS.LEGACY_SETTINGS);
+
+  logger.info(`Migrated legacy data into project "${projectName}" (${projectId})`);
+  return true;
+}
+
+// ── Initialization ──
 
 export async function ensureInitialized(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
-  const storedQueue = await storageGet<QueueState>(STORAGE_KEYS.queue);
-  const storedSettings = await storageGet<UserSettings>(STORAGE_KEYS.settings);
+  // Try migration first
+  const migrated = await migrateFromLegacyKeys();
+  if (migrated) return;
 
-  if (storedQueue && Array.isArray(storedQueue.tasks)) queue = storedQueue;
-  if (storedSettings) settings = { ...DEFAULT_SETTINGS, ...storedSettings };
+  // Load existing projects list
+  const storedProjects = await storageGet<Project[]>(STORAGE_KEYS.PROJECTS_LIST);
+  const storedActiveId = await storageGet<string>(STORAGE_KEYS.ACTIVE_PROJECT);
+
+  if (storedProjects && storedProjects.length > 0) {
+    projects = storedProjects;
+    activeProjectId =
+      storedActiveId && storedProjects.some((p) => p.id === storedActiveId)
+        ? storedActiveId
+        : storedProjects[0].id;
+  } else {
+    // Fresh install: create default project
+    const projectId = makeId("proj");
+    projects = [{ id: projectId, name: "默认项目", createdAt: now() }];
+    activeProjectId = projectId;
+    await persistProjects();
+    await persistActiveProject();
+  }
+
+  // Load active project data
+  const data = await loadProjectData(activeProjectId);
+  queue = data.queue;
+  settings = data.settings;
 }
+
+// ── Project CRUD ──
+
+export async function getActiveProjectId(): Promise<string> {
+  await ensureInitialized();
+  return activeProjectId;
+}
+
+export async function listProjects(): Promise<Project[]> {
+  await ensureInitialized();
+  return [...projects];
+}
+
+export async function createProject(name: string): Promise<Project> {
+  await ensureInitialized();
+  const project: Project = {
+    id: makeId("proj"),
+    name,
+    createdAt: now(),
+  };
+  projects = [...projects, project];
+
+  // Initialize empty queue & default settings for the new project
+  await storageSet(
+    STORAGE_KEYS.projectQueue(project.id),
+    structuredClone(DEFAULT_QUEUE_STATE),
+  );
+  await storageSet(
+    STORAGE_KEYS.projectSettings(project.id),
+    structuredClone(DEFAULT_SETTINGS),
+  );
+  await persistProjects();
+  return project;
+}
+
+export async function renameProject(
+  projectId: string,
+  newName: string,
+): Promise<void> {
+  await ensureInitialized();
+  const idx = projects.findIndex((p) => p.id === projectId);
+  if (idx === -1) throw new Error(`Project not found: ${projectId}`);
+  projects = projects.map((p) =>
+    p.id === projectId ? { ...p, name: newName } : p,
+  );
+  await persistProjects();
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  await ensureInitialized();
+  if (projects.length <= 1) {
+    throw new Error("Cannot delete the last project");
+  }
+
+  const idx = projects.findIndex((p) => p.id === projectId);
+  if (idx === -1) throw new Error(`Project not found: ${projectId}`);
+
+  // GC: remove image blobs for all tasks in the deleted project
+  const projectData = await loadProjectData(projectId);
+  const refIds = collectAssetRefIds(projectData.queue.tasks);
+  if (refIds.length) {
+    void deleteImageBlobs(refIds).catch((e) =>
+      logger.warn("deleteImageBlobs failed during project delete", e),
+    );
+  }
+
+  // Remove project-scoped storage keys
+  await storageRemove(STORAGE_KEYS.projectQueue(projectId));
+  await storageRemove(STORAGE_KEYS.projectSettings(projectId));
+
+  projects = projects.filter((p) => p.id !== projectId);
+  await persistProjects();
+
+  // If we deleted the active project, switch to the first remaining
+  if (activeProjectId === projectId) {
+    activeProjectId = projects[0].id;
+    await persistActiveProject();
+    const data = await loadProjectData(activeProjectId);
+    queue = data.queue;
+    settings = data.settings;
+  }
+}
+
+export async function switchProject(
+  projectId: string,
+): Promise<{ queue: QueueState; settings: UserSettings }> {
+  await ensureInitialized();
+  if (queue.isRunning) {
+    throw new Error("Cannot switch project while queue is running");
+  }
+  if (projectId === activeProjectId) return { queue, settings };
+
+  if (!projects.some((p) => p.id === projectId)) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  // Save current project state
+  await persist();
+
+  // Switch
+  activeProjectId = projectId;
+  await persistActiveProject();
+
+  // Load target project data
+  const data = await loadProjectData(projectId);
+  queue = data.queue;
+  settings = data.settings;
+
+  return { queue, settings };
+}
+
+// ── Storage quota ──
+
+export async function getStorageUsage(): Promise<{
+  bytesUsed: number;
+  quota: number;
+  warning: boolean;
+}> {
+  const bytesUsed = await new Promise<number>((resolve) => {
+    if (chrome.storage.local.getBytesInUse) {
+      chrome.storage.local.getBytesInUse((bytes: number) => resolve(bytes));
+    } else {
+      resolve(0);
+    }
+  });
+  return {
+    bytesUsed,
+    quota: STORAGE_QUOTA_BYTES,
+    warning: bytesUsed > STORAGE_QUOTA_BYTES * STORAGE_QUOTA_WARN_RATIO,
+  };
+}
+
+// ── Queue operations (unchanged API, project-scoped persistence) ──
 
 export async function getAppState(): Promise<{
   queue: QueueState;
@@ -72,16 +312,14 @@ export async function clearQueue(): Promise<{
   settings: UserSettings;
 }> {
   await ensureInitialized();
-  // GC: clean up all image blobs since we're wiping everything.
   void clearAllImageBlobs().catch((e) =>
     logger.warn("clearAllImageBlobs failed", e),
   );
   queue = structuredClone(DEFAULT_QUEUE_STATE);
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
-/** Remove only finished tasks (success / error / skipped). Waiting/running tasks are kept. */
 export async function clearHistory(): Promise<{
   queue: QueueState;
   settings: UserSettings;
@@ -89,7 +327,6 @@ export async function clearHistory(): Promise<{
   await ensureInitialized();
   const DONE: Set<string> = new Set(["success", "error", "skipped"]);
   const removed = queue.tasks.filter((t) => DONE.has(t.status));
-  // GC: clean up image blobs from removed tasks.
   const refIds = collectAssetRefIds(removed);
   if (refIds.length)
     void deleteImageBlobs(refIds).catch((e) =>
@@ -99,7 +336,7 @@ export async function clearHistory(): Promise<{
     ...queue,
     tasks: queue.tasks.filter((t) => !DONE.has(t.status)),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -122,7 +359,7 @@ export async function addPrompts(
       outputCount: settings.defaultOutputCount,
       status: "waiting",
       retries: 0,
-      maxRetries: 0, // No auto-retry; user can manually retry via "重试失败项"
+      maxRetries: 0,
       createdAt: now(),
       downloadResolution: settings.defaultDownloadResolution,
       logs: [{ ts: now(), msg: "任务已创建入队" }],
@@ -146,7 +383,7 @@ export async function addPrompts(
     tasks: [...queue.tasks, ...newTasks],
   };
 
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -155,7 +392,7 @@ export async function setRunning(
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   queue = { ...queue, isRunning };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -163,7 +400,6 @@ export async function removeTask(
   taskId: string,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
-  // GC: clean up image blobs from the removed task.
   const removed = queue.tasks.find((t) => t.id === taskId);
   if (removed) {
     const refIds = collectAssetRefIds([removed]);
@@ -180,7 +416,7 @@ export async function removeTask(
     queue.currentTaskId = undefined;
     queue.isRunning = false;
   }
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -201,7 +437,7 @@ export async function skipTask(
       };
     }),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -223,7 +459,7 @@ export async function retryErrors(): Promise<{
       };
     }),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -232,7 +468,7 @@ export async function updateSettings(
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
   settings = { ...settings, ...patch };
-  await persist();
+  await persistSettings();
   return { queue, settings };
 }
 
@@ -258,7 +494,7 @@ export async function markTaskRunning(
       };
     }),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -274,7 +510,7 @@ export async function markTaskSuccess(
       return { ...t, status: "success", completedAt: now() };
     }),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -300,7 +536,7 @@ export async function markTaskError(
       };
     }),
   };
-  await persist();
+  await persistQueue();
   return { queue, settings };
 }
 
@@ -318,5 +554,5 @@ export async function appendTaskLog(
       return { ...t, logs };
     }),
   };
-  await persist();
+  await persistQueue();
 }
