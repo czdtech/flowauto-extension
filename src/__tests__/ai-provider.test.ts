@@ -29,6 +29,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 import { createAiProvider } from "../background/ai-providers";
 import { OpenAiProvider, parseNumberedList } from "../background/ai-providers/openai-provider";
 import { GeminiProvider } from "../background/ai-providers/gemini-provider";
+import { ProxyProvider } from "../background/ai-providers/proxy-provider";
 import type { AiSettings } from "../shared/ai-provider";
 
 beforeEach(() => {
@@ -49,9 +50,15 @@ describe("createAiProvider", () => {
     expect(p).toBeInstanceOf(GeminiProvider);
   });
 
-  it("throws for 'proxy' (not implemented)", () => {
-    const s: AiSettings = { provider: "proxy", apiKey: "key", model: "" };
-    expect(() => createAiProvider(s)).toThrow(/not yet implemented/i);
+  it("returns ProxyProvider for 'proxy' with licenseKey", () => {
+    const s: AiSettings = { provider: "proxy", apiKey: "", model: "", licenseKey: "lk_123" };
+    const p = createAiProvider(s);
+    expect(p).toBeInstanceOf(ProxyProvider);
+  });
+
+  it("throws for 'proxy' without licenseKey", () => {
+    const s: AiSettings = { provider: "proxy", apiKey: "", model: "" };
+    expect(() => createAiProvider(s)).toThrow(/license key required/i);
   });
 
   it("throws for unknown provider", () => {

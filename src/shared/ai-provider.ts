@@ -10,4 +10,5 @@ export interface AiSettings {
   provider: AiProviderType;
   apiKey: string;
   model: string;
+  licenseKey?: string;
 }

@@ -242,9 +242,13 @@
         >
           <option value="openai">OpenAI</option>
           <option value="gemini">Gemini</option>
+          {#if isFeatureEnabled('ai_proxy', tier)}
+            <option value="proxy">代理 (Pro+)</option>
+          {/if}
         </select>
       </label>
 
+      {#if s_aiProvider !== 'proxy'}
       <label>
         <div class="lab">模型</div>
         <select
@@ -272,6 +276,9 @@
           onchange={(e) => patchAi({ apiKey: (e.target as HTMLInputElement).value })}
         />
       </label>
+      {:else}
+      <p class="proxy-hint full-width">使用 FlowAuto 代理，无需 API Key</p>
+      {/if}
     </div>
   </details>
   {/if}
@@ -411,4 +418,5 @@
   .test-ok { color: rgba(126, 231, 135, 0.9); font-size: 11px; }
   .test-err { color: rgba(255, 100, 100, 0.9); font-size: 11px; }
   .lock { font-size: 10px; margin-left: 4px; opacity: 0.6; }
+  .proxy-hint { font-size: 11px; opacity: 0.6; margin: 0; }
 </style>
