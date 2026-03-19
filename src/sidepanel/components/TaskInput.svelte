@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GenerationType } from '../../shared/types';
-  
+  import { isFeatureEnabled, type Tier } from '../../shared/feature-gate';
+
   interface ImportSummary {
     txtCount: number;
     imgCount: number;
@@ -9,12 +10,13 @@
     matchedFiles: string[];
     warnings?: string[];
   }
-  
+
   interface Props {
     promptText: string;
     folderImportStatus: string;
     importSummary: ImportSummary | null;
     s_defaultGenerationType: GenerationType;
+    tier: Tier;
     handleFileImport: (e: Event) => void;
     handleMultiFileImport: (e: Event) => Promise<void>;
     startQueue: () => void;
@@ -32,12 +34,13 @@
     aiLoading: boolean;
     hasAiSettings: boolean;
   }
-  
+
   let {
     promptText = $bindable(),
     folderImportStatus = $bindable(),
     importSummary,
     s_defaultGenerationType,
+    tier,
     handleFileImport,
     handleMultiFileImport,
     startQueue,
@@ -77,7 +80,7 @@
   </button>
 </div>
 
-{#if hasAiSettings}
+{#if hasAiSettings && isFeatureEnabled('ai_own_key', tier)}
   <div class="ai-row">
     <button class="btn btn-ai" onclick={onAiEnhance} disabled={aiLoading || !promptText.trim()}>
       {aiLoading ? '处理中...' : 'AI 增强'}
