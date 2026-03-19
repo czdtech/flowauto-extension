@@ -38,11 +38,14 @@ export class GeminiProvider implements AiProvider {
   }
 
   private async generate(system: string, user: string): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
 
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": this.apiKey,
+      },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ parts: [{ text: user }] }],

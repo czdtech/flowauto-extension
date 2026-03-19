@@ -48,9 +48,9 @@ describe('extractTierFromResponse', () => {
     expect(extractTierFromResponse(data)).toBe('pro');
   });
 
-  it('defaults to pro when no tier info found', () => {
-    const data = { activated: true };
-    expect(extractTierFromResponse(data)).toBe('pro');
+  it('defaults to free when no tier info found', () => {
+    const data = {};
+    expect(extractTierFromResponse(data)).toBe('free');
   });
 
   it('meta.custom_data takes precedence over variant_name', () => {
@@ -191,10 +191,10 @@ describe('getCurrentTier', () => {
       lastValidated: eightDaysAgo,
     };
 
-    // Mock successful revalidation
+    // Mock successful revalidation with tier info
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ valid: true }),
+      json: () => Promise.resolve({ valid: true, meta: { custom_data: { tier: 'pro' } } }),
     });
 
     const tier = await getCurrentTier();
@@ -271,7 +271,7 @@ describe('getCurrentTier', () => {
 
     globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ valid: true }),
+      json: () => Promise.resolve({ valid: true, meta: { custom_data: { tier: 'pro_plus' } } }),
     });
 
     const tier = await getCurrentTier();

@@ -152,10 +152,11 @@ describe("GeminiProvider", () => {
     const result = await provider.enhance("a dog");
     expect(result).toBe("gemini enhanced");
 
-    const [url] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain("generativelanguage.googleapis.com");
-    expect(url).toContain("key=gem-key");
     expect(url).toContain("gemini-2.0-flash");
+    expect(url).not.toContain("key="); // key should be in header, not URL
+    expect((init as RequestInit).headers).toHaveProperty("x-goog-api-key", "gem-key");
   });
 
   it("rewrite includes error in system instruction", async () => {

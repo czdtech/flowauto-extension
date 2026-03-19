@@ -1,5 +1,6 @@
 import { MSG } from '../shared/constants';
 import type { ExecuteTaskRequest, TaskResultResponse } from '../shared/protocol';
+import type { TaskItem } from '../shared/types';
 import { sleep } from '../shared/sleep';
 import { errorMsg, logger } from '../shared/logger';
 import {
@@ -140,7 +141,13 @@ async function runLoop(): Promise<void> {
     const tier = await getCurrentTier();
     const limitCheck = await checkDailyLimit(tier);
     if (!limitCheck.allowed) {
-      await skipTask(next.id, limitCheck.message ?? '已达每日免费额度上限，请升级至 Pro');
+      const limitMsg = limitCheck.message ?? '已达每日免费额度上限，请升级至 Pro';
+      // Skip all remaining waiting tasks, not just the current one
+      let task: TaskItem | undefined = next;
+      while (task) {
+        await skipTask(task.id, limitMsg);
+        task = await getNextWaitingTask();
+      }
       await setRunning(false);
       break;
     }
@@ -196,14 +203,15 @@ async function runLoop(): Promise<void> {
         await markTaskError(next.id, taskErrorMsg);
         errorCount++;
         taskFailed = true;
-        await tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
+        // Fire-and-forget: don't block runner loop on AI API call
+        void tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
       }
     } catch (e: unknown) {
       taskErrorMsg = errorMsg(e);
       await markTaskError(next.id, taskErrorMsg);
       errorCount++;
       taskFailed = true;
-      await tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
+      void tryAutoRewrite(next.id, next.prompt, taskErrorMsg);
     }
 
     // Immediate error notification

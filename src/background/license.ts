@@ -80,7 +80,12 @@ export async function clearLicense(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY);
 }
 
-export function extractTierFromResponse(data: any): Tier {
+interface LemonSqueezyLicenseResponse {
+  meta?: { custom_data?: { tier?: string } };
+  license_key?: { variant_name?: string };
+}
+
+export function extractTierFromResponse(data: LemonSqueezyLicenseResponse): Tier {
   const meta = data.meta?.custom_data;
   if (meta?.tier === 'pro_plus') return 'pro_plus';
   if (meta?.tier === 'pro') return 'pro';
@@ -93,7 +98,8 @@ export function extractTierFromResponse(data: any): Tier {
     return 'pro_plus';
   if (variant.toLowerCase().includes('pro')) return 'pro';
 
-  return 'pro';
+  // Default to free if tier cannot be determined — safer than granting pro
+  return 'free';
 }
 
 async function revalidateLicense(license: LicenseData): Promise<void> {
@@ -111,6 +117,9 @@ async function revalidateLicense(license: LicenseData): Promise<void> {
   const data = await res.json();
   if (!data.valid) throw new Error('License no longer valid');
 
+  // Update tier from response (handles upgrades/downgrades)
+  const newTier = extractTierFromResponse(data);
+  license.tier = newTier;
   license.lastValidated = Date.now();
   await chrome.storage.local.set({ [STORAGE_KEY]: license });
 }

@@ -1,13 +1,16 @@
 interface Env {
   OPENAI_API_KEY: string;
   RATE_LIMIT: KVNamespace;
+  ALLOWED_ORIGIN?: string; // chrome-extension://<extension-id>
 }
 
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-License-Key",
-};
+function corsHeaders(env: Env): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "chrome-extension://flowauto",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-License-Key",
+  };
+}
 
 const MONTHLY_QUOTA = 500;
 const LICENSE_CACHE_TTL = 3600; // 1 hour
@@ -24,15 +27,16 @@ const SYSTEM_VARIANTS_PREFIX =
 
 // ---------- helpers ----------
 
-function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
+function json(body: unknown, status = 200, extra: Record<string, string> = {}, env?: Env): Response {
+  const cors = env ? corsHeaders(env) : {};
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS, ...extra },
+    headers: { "Content-Type": "application/json", ...cors, ...extra },
   });
 }
 
-function corsResponse(): Response {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+function corsResponse(env: Env): Response {
+  return new Response(null, { status: 204, headers: corsHeaders(env) });
 }
 
 function monthKey(): string {
@@ -130,14 +134,14 @@ async function handleEnhance(
   licenseKey: string,
 ): Promise<Response> {
   const { prompt } = (await request.json()) as { prompt: string };
-  if (!prompt) return json({ error: "Missing prompt" }, 400);
+  if (!prompt) return json({ error: "Missing prompt" }, 400, {}, env);
 
   const result = await chatCompletion(env, SYSTEM_ENHANCE, prompt);
   await decrementQuota(env, licenseKey, remaining);
 
   return json({ result }, 200, {
     "X-AI-Quota-Remaining": String(remaining - 1),
-  });
+  }, env);
 }
 
 async function handleRewrite(
@@ -150,7 +154,7 @@ async function handleRewrite(
     prompt: string;
     error: string;
   };
-  if (!prompt) return json({ error: "Missing prompt" }, 400);
+  if (!prompt) return json({ error: "Missing prompt" }, 400, {}, env);
 
   const system = `${SYSTEM_REWRITE_PREFIX} Error: ${error}. Return only the rewritten prompt.`;
   const result = await chatCompletion(env, system, prompt);
@@ -158,7 +162,7 @@ async function handleRewrite(
 
   return json({ result }, 200, {
     "X-AI-Quota-Remaining": String(remaining - 1),
-  });
+  }, env);
 }
 
 async function handleVariants(
@@ -171,7 +175,7 @@ async function handleVariants(
     prompt: string;
     count?: number;
   };
-  if (!prompt) return json({ error: "Missing prompt" }, 400);
+  if (!prompt) return json({ error: "Missing prompt" }, 400, {}, env);
 
   const system = SYSTEM_VARIANTS_PREFIX.replace(
     "Generate creative",
@@ -189,27 +193,27 @@ async function handleVariants(
 
   return json({ result }, 200, {
     "X-AI-Quota-Remaining": String(remaining - 1),
-  });
+  }, env);
 }
 
 // ---------- entry ----------
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") return corsResponse();
+    if (request.method === "OPTIONS") return corsResponse(env);
 
     const url = new URL(request.url);
 
     // License key validation
     const licenseKey = request.headers.get("X-License-Key");
-    if (!licenseKey) return json({ error: "Missing license key" }, 401);
+    if (!licenseKey) return json({ error: "Missing license key" }, 401, {}, env);
 
     const valid = await validateLicense(env, licenseKey);
-    if (!valid) return json({ error: "Invalid license key" }, 403);
+    if (!valid) return json({ error: "Invalid license key" }, 403, {}, env);
 
     // Rate limiting
     const remaining = await getRemainingQuota(env, licenseKey);
-    if (remaining <= 0) return json({ error: "Monthly quota exceeded" }, 429);
+    if (remaining <= 0) return json({ error: "Monthly quota exceeded" }, 429, {}, env);
 
     // Route
     try {
@@ -224,9 +228,9 @@ export default {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Internal error";
-      return json({ error: message }, 502);
+      return json({ error: message }, 502, {}, env);
     }
 
-    return json({ error: "Not found" }, 404);
+    return json({ error: "Not found" }, 404, {}, env);
   },
 };

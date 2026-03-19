@@ -13,7 +13,7 @@ import {
   type UserSettings,
 } from "../shared/types";
 import { storageGet, storageSet, storageRemove } from "./storage";
-import { deleteImageBlobs, clearAllImageBlobs } from "../shared/image-store";
+import { deleteImageBlobs } from "../shared/image-store";
 
 // ── Helpers ──
 
@@ -37,7 +37,7 @@ function makeId(prefix = "t"): string {
 
 // ── Module state ──
 
-let initialized = false;
+let initPromise: Promise<void> | null = null;
 let projects: Project[] = [];
 let activeProjectId = "";
 let queue: QueueState = structuredClone(DEFAULT_QUEUE_STATE);
@@ -134,8 +134,12 @@ async function migrateFromLegacyKeys(): Promise<boolean> {
 // ── Initialization ──
 
 export async function ensureInitialized(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
+  if (initPromise) return initPromise;
+  initPromise = doInit();
+  return initPromise;
+}
+
+async function doInit(): Promise<void> {
 
   // Try migration first
   const migrated = await migrateFromLegacyKeys();
@@ -312,9 +316,13 @@ export async function clearQueue(): Promise<{
   settings: UserSettings;
 }> {
   await ensureInitialized();
-  void clearAllImageBlobs().catch((e) =>
-    logger.warn("clearAllImageBlobs failed", e),
-  );
+  // GC: only delete blobs belonging to the current project's tasks, not all projects.
+  const refIds = collectAssetRefIds(queue.tasks);
+  if (refIds.length) {
+    void deleteImageBlobs(refIds).catch((e) =>
+      logger.warn("deleteImageBlobs failed", e),
+    );
+  }
   queue = structuredClone(DEFAULT_QUEUE_STATE);
   await persistQueue();
   return { queue, settings };
