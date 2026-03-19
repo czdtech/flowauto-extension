@@ -167,6 +167,10 @@ export async function removeTask(
   const removed = queue.tasks.find((t) => t.id === taskId);
   if (removed) {
     const refIds = collectAssetRefIds([removed]);
+    // Also clean up chain blob if present.
+    if (removed.chainPreviousRefId?.startsWith("chain-")) {
+      refIds.push(removed.chainPreviousRefId);
+    }
     if (refIds.length)
       void deleteImageBlobs(refIds).catch((e) =>
         logger.warn("deleteImageBlobs failed", e),
@@ -179,6 +183,15 @@ export async function removeTask(
   if (queue.currentTaskId === taskId) {
     queue.currentTaskId = undefined;
     queue.isRunning = false;
+  }
+  // Clear stale chain refs on remaining tasks when a task is removed.
+  if (settings.chainMode) {
+    queue = {
+      ...queue,
+      tasks: queue.tasks.map((t) =>
+        t.chainPreviousRefId ? { ...t, chainPreviousRefId: undefined } : t,
+      ),
+    };
   }
   await persist();
   return { queue, settings };

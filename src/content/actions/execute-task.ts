@@ -24,7 +24,7 @@ import { getProjectName } from "../page-state";
 import { randomSleep, stealthRandomSleep } from "../utils/dom";
 import { selectTab } from "./navigate";
 import { findPromptInput } from "../finders";
-import { saveImageBlob } from "../../shared/image-store";
+import { saveImageBlob, deleteImageBlob } from "../../shared/image-store";
 
 // In-memory blob cache keyed by refId.  Avoids repeated IndexedDB + base64
 // round-trips when the same image (same refId) is needed across tasks.
@@ -283,6 +283,10 @@ export async function executeTask(
         const chainBlob = await fetchAssetBlob(task.chainPreviousRefId);
         log("注入链式引用图");
         await injectImageToFlow(chainBlob, "chain-ref.png", {});
+        // Clean up chain blob from IndexedDB to avoid bloat.
+        if (task.chainPreviousRefId.startsWith("chain-")) {
+          void deleteImageBlob(task.chainPreviousRefId).catch(() => {});
+        }
         await stealthRandomSleep(TIMING.BETWEEN_ASSETS_MIN, TIMING.BETWEEN_ASSETS_MAX, stealth);
       } catch (e: unknown) {
         logger.warn("Chain ref injection failed:", e);
@@ -363,6 +367,10 @@ export async function executeTask(
       const chainBlob = await fetchAssetBlob(task.chainPreviousRefId);
       log("注入链式引用图");
       await injectImageToFlow(chainBlob, "chain-ref.png", {});
+      // Clean up chain blob from IndexedDB to avoid bloat.
+      if (task.chainPreviousRefId.startsWith("chain-")) {
+        void deleteImageBlob(task.chainPreviousRefId).catch(() => {});
+      }
       await stealthRandomSleep(TIMING.LONG_MIN, TIMING.LONG_MAX, stealth);
     } catch (e: unknown) {
       logger.warn("Chain ref injection failed:", e);
