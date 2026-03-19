@@ -1,5 +1,6 @@
 import { getElementName, matchesName, type NameMatcher } from './aria';
 import { logger } from '../../shared/logger';
+import { STEALTH } from '../../shared/config';
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -8,6 +9,21 @@ export function sleep(ms: number): Promise<void> {
 export function randomSleep(minMs: number, maxMs: number): Promise<void> {
   const ms = Math.round(minMs + Math.random() * (maxMs - minMs));
   return sleep(ms);
+}
+
+export function calcStealthDelay(minMs: number, maxMs: number, stealth: boolean): [number, number] {
+  if (!stealth) return [minMs, maxMs];
+  const stealthMin = minMs * STEALTH.MULTIPLIER_MIN;
+  const stealthMax = Math.min(
+    maxMs * STEALTH.MULTIPLIER_MAX,
+    maxMs * STEALTH.MAX_SLOWDOWN_FACTOR,
+  );
+  return [stealthMin, stealthMax];
+}
+
+export function stealthRandomSleep(minMs: number, maxMs: number, stealth: boolean): Promise<void> {
+  const [adjMin, adjMax] = calcStealthDelay(minMs, maxMs, stealth);
+  return randomSleep(adjMin, adjMax);
 }
 
 export function isVisible(el: Element): el is HTMLElement {
