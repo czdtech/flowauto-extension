@@ -88,7 +88,7 @@ async function getGridDownloadButtons(baselineUrls?: Set<string>): Promise<{btn:
           if (!isVisible(b)) return false;
           const name = (b.getAttribute('name') ?? '').toLowerCase();
           const text = (b.textContent || '').toLowerCase();
-          return name.includes('下载') || name.includes('download') || text === '下载' || text === 'download';
+          return name.includes('下载') || name.includes('download') || text.includes('下载') || text.includes('download');
         });
         
         // Follow-up: For models like Nano Banana Pro, there is no direct download button.
@@ -244,15 +244,23 @@ export async function downloadTopNLatestWithNaming(
     // 3. Find the menu items
     let menuItems = querySelectorAllDeep<HTMLElement>('[role="menuitem"]').filter(isVisible);
     
-    // Check if we just opened the "更多" (More) root menu, which contains a "下载" entry that we must click to see resolutions
+    // Check if we just opened the "更多" (More) root menu, which contains a "下载" entry that we must click to see resolutions.
+    // We detect the root menu by looking for Material Design icon names embedded in textContent
+    // (e.g. "motion_blur 添加动画效果" / "motion_blur Add animation effect").
+    // These icon names are language-independent and always present.
     const isMoreMenu = menuItems.some(item => {
       const txt = (item.textContent || '').toLowerCase();
-      return txt.includes('添加动画效果') || txt.includes('添加到提示') || (txt.includes('下载') && !txt.includes('1k'));
+      return txt.includes('motion_blur') || txt.includes('content_cut')
+        || txt.includes('添加动画效果') || txt.includes('添加到提示')
+        || ((txt.includes('下载') || txt.includes('download')) && !txt.includes('1k'));
     });
 
     if (isMoreMenu) {
        logger.debug(`进入了 "更多" 根菜单，正在展开 "下载" 分辨率子菜单...`);
-       const dlItem = menuItems.find(el => (el.textContent || '').includes('下载') && !(el.textContent || '').toLowerCase().includes('1k'));
+       const dlItem = menuItems.find(el => {
+         const t = (el.textContent || '').toLowerCase();
+         return (t.includes('下载') || t.includes('download')) && !t.includes('1k');
+       });
        if (dlItem) {
            // Phase 1: Hover to try expanding submenu (Radix submenus use hover)
            const rect = dlItem.getBoundingClientRect();

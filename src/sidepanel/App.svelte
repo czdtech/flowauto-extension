@@ -170,6 +170,9 @@
         if (base.length >= 2) imgByBaseName.set(base, img);
       }
 
+      // Track whether filename-based matching actually matched anything.
+      let filenameMatchedCount = 0;
+
       if (hasAnyFilename) {
         matchMode = '按文件名匹配';
         for (const p of prompts) {
@@ -179,9 +182,14 @@
 
           p.assets = [await storeAsAsset(imageFile)];
           matchedCount++;
+          filenameMatchedCount++;
           matchedFiles.push(imageFile.name);
         }
-      } else if (imageList.length > 0) {
+      }
+
+      // Fall through to inline/smart matching when filename matching produced
+      // nothing, or when there were no filename hints at all.
+      if ((!hasAnyFilename || filenameMatchedCount === 0) && imageList.length > 0) {
         let inlineTotal = 0;
         const inlineResults: { promptIdx: number; refs: File[] }[] = [];
 
