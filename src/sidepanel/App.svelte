@@ -5,6 +5,7 @@
   import SettingsPanel from './components/SettingsPanel.svelte';
   import TaskInput from './components/TaskInput.svelte';
   import TaskList from './components/TaskList.svelte';
+  import LicensePanel from './components/LicensePanel.svelte';
   import { MSG } from '../shared/constants';
   import { parsePromptText } from '../shared/prompt-parser';
   import { saveImageBlob } from '../shared/image-store';
@@ -40,7 +41,12 @@
   } from '../shared/protocol';
   import { modeForModel } from '../shared/types';
   import type { AiProviderType } from '../shared/ai-provider';
+  import type { Tier } from '../shared/feature-gate';
   import type { GenerationMode, GenerationType, Project, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
+  import type {
+    LicenseGetStatusRequest,
+    LicenseGetStatusResponse,
+  } from '../shared/protocol';
 
   type Status = 'checking' | 'connected' | 'disconnected';
 
@@ -78,6 +84,10 @@
   let s_aiApiKey = $state('');
   let s_aiModel = $state('gpt-4o-mini');
   let aiLoading = $state(false);
+
+  let currentTier: Tier = $state('free');
+  let dailyCount = $state(0);
+  let dailyLimit = $state(30);
 
   function sendMessage<TReq, TRes>(message: TReq): Promise<TRes> {
     return new Promise((resolve, reject) => {
@@ -386,6 +396,19 @@
     }
   }
 
+  async function refreshLicenseStatus(): Promise<void> {
+    try {
+      const res = await sendMessage<LicenseGetStatusRequest, LicenseGetStatusResponse>({
+        type: MSG.LICENSE_GET_STATUS,
+      });
+      currentTier = res.tier;
+      dailyCount = res.dailyCount;
+      dailyLimit = res.dailyLimit;
+    } catch {
+      // silently keep last known state
+    }
+  }
+
   async function handleProjectSwitch(projectId: string): Promise<void> {
     queueError = '';
     try {
@@ -598,7 +621,7 @@
   let timer: number | undefined;
   onMount(() => {
     const tick = async () => {
-      await Promise.all([ping(), refreshQueue(), refreshPageState(), refreshProjects()]);
+      await Promise.all([ping(), refreshQueue(), refreshPageState(), refreshProjects(), refreshLicenseStatus()]);
     };
 
     tick();
@@ -713,8 +736,16 @@
   {/if}
 
   <section class="card card-gap">
+    <LicensePanel
+      tier={currentTier}
+      {dailyCount}
+      {dailyLimit}
+      onTierChanged={refreshLicenseStatus}
+    />
+
     <SettingsPanel
       {settings}
+      tier={currentTier}
       bind:s_defaultModel
       bind:s_defaultGenerationType
       bind:s_defaultAspectRatio
@@ -734,6 +765,7 @@
       bind:folderImportStatus
       bind:importSummary
       {s_defaultGenerationType}
+      tier={currentTier}
       {handleFileImport}
       {handleMultiFileImport}
       {startQueue}

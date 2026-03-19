@@ -5,9 +5,11 @@
   import { DEFAULT_NOTIFICATION_SETTINGS } from '../../shared/types';
   import { MSG } from '../../shared/constants';
   import type { TestNotificationRequest, TestNotificationResponse } from '../../shared/protocol';
+  import { isFeatureEnabled, type Tier } from '../../shared/feature-gate';
 
   interface Props {
     settings: UserSettings | null;
+    tier: Tier;
     s_defaultModel: UserSettings['defaultModel'];
     s_defaultGenerationType: UserSettings['defaultGenerationType'];
     s_defaultAspectRatio: UserSettings['defaultAspectRatio'];
@@ -24,6 +26,7 @@
 
   let {
     settings,
+    tier,
     s_defaultModel = $bindable(),
     s_defaultGenerationType = $bindable(),
     s_defaultAspectRatio = $bindable(),
@@ -199,25 +202,34 @@
       </label>
 
       <label class="toggle-row">
-        <div class="lab">隐身模式</div>
+        <div class="lab">
+          隐身模式
+          {#if !isFeatureEnabled('stealth_mode', tier)}<span class="lock" title="Pro+ 专属">🔒</span>{/if}
+        </div>
         <input
           type="checkbox"
           bind:checked={s_stealthMode}
           onchange={() => patchSettings({ stealthMode: s_stealthMode })}
+          disabled={!isFeatureEnabled('stealth_mode', tier)}
         />
       </label>
 
       <label class="toggle-row">
-        <div class="lab">链式模式</div>
+        <div class="lab">
+          链式模式
+          {#if !isFeatureEnabled('chain_mode', tier)}<span class="lock" title="Pro 专属">🔒</span>{/if}
+        </div>
         <input
           type="checkbox"
           bind:checked={s_chainMode}
           onchange={() => patchSettings({ chainMode: s_chainMode })}
+          disabled={!isFeatureEnabled('chain_mode', tier)}
         />
       </label>
     </div>
   </details>
 
+  {#if isFeatureEnabled('ai_own_key', tier)}
   <details class="settings">
     <summary>AI 设置</summary>
     <div class="grid">
@@ -262,7 +274,9 @@
       </label>
     </div>
   </details>
+  {/if}
 
+  {#if isFeatureEnabled('notifications', tier)}
   <details class="settings">
     <summary>通知设置</summary>
     <div class="grid">
@@ -326,6 +340,7 @@
       {/if}
     </div>
   </details>
+  {/if}
 {/if}
 
 <style>
@@ -395,4 +410,5 @@
   .test-btn:disabled { opacity: 0.5; cursor: default; }
   .test-ok { color: rgba(126, 231, 135, 0.9); font-size: 11px; }
   .test-err { color: rgba(255, 100, 100, 0.9); font-size: 11px; }
+  .lock { font-size: 10px; margin-left: 4px; opacity: 0.6; }
 </style>

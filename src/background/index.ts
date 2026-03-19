@@ -47,6 +47,12 @@ import type {
   RefMediaUpsertResponse,
   TestNotificationRequest,
   TestNotificationResponse,
+  LicenseActivateRequest,
+  LicenseActivateResponse,
+  LicenseGetStatusRequest,
+  LicenseGetStatusResponse,
+  LicenseClearRequest,
+  LicenseClearResponse,
 } from "../shared/protocol";
 import { getImageAsBase64 } from "../shared/image-store";
 import {
@@ -79,6 +85,9 @@ import { TIMEOUTS } from "../shared/config";
 import { logger } from "../shared/logger";
 import { createAiProvider } from "./ai-providers";
 import { sendNotification } from "./notifier";
+import { activateLicense, getCurrentTier, clearLicense } from "./license";
+import { getDailyCount } from "./daily-counter";
+import { getDailyLimit } from "../shared/feature-gate";
 
 initDownloadManager();
 
@@ -616,6 +625,39 @@ async function handleTestNotification(
   }
 }
 
+async function handleLicenseActivate(
+  req: LicenseActivateRequest,
+): Promise<LicenseActivateResponse> {
+  try {
+    const license = await activateLicense(req.key);
+    return { type: MSG.LICENSE_ACTIVATE, ok: true, tier: license.tier };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { type: MSG.LICENSE_ACTIVATE, ok: false, error: msg };
+  }
+}
+
+async function handleLicenseGetStatus(
+  _req: LicenseGetStatusRequest,
+): Promise<LicenseGetStatusResponse> {
+  const tier = await getCurrentTier();
+  const dailyCount = await getDailyCount();
+  const dailyLimit = getDailyLimit(tier);
+  return {
+    type: MSG.LICENSE_GET_STATUS,
+    tier,
+    dailyCount,
+    dailyLimit,
+  };
+}
+
+async function handleLicenseClear(
+  _req: LicenseClearRequest,
+): Promise<LicenseClearResponse> {
+  await clearLicense();
+  return { type: MSG.LICENSE_CLEAR, ok: true };
+}
+
 async function makeErrorResponse(
   message: AnyRequest,
 ): Promise<AnyResponse | undefined> {
@@ -721,6 +763,12 @@ chrome.runtime.onMessage.addListener(
           return handleAiVariants(message as AiVariantsRequest);
         if (message.type === MSG.TEST_NOTIFICATION)
           return handleTestNotification(message as TestNotificationRequest);
+        if (message.type === MSG.LICENSE_ACTIVATE)
+          return handleLicenseActivate(message as LicenseActivateRequest);
+        if (message.type === MSG.LICENSE_GET_STATUS)
+          return handleLicenseGetStatus(message as LicenseGetStatusRequest);
+        if (message.type === MSG.LICENSE_CLEAR)
+          return handleLicenseClear(message as LicenseClearRequest);
         return undefined;
       } catch {
         return await makeErrorResponse(message);

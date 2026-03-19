@@ -11,6 +11,7 @@ import {
   setChainRef,
   resetTaskForRetry,
   setRunning,
+  skipTask,
 } from './queue-engine';
 import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
@@ -21,6 +22,8 @@ import {
   formatQueueCompleteMessage,
   formatTaskErrorMessage,
 } from './notifier';
+import { getCurrentTier } from './license';
+import { checkDailyLimit, incrementDailyCount } from './daily-counter';
 
 /** Check whether a tab URL points to a Flow project. */
 function isFlowProjectUrl(url: string): boolean {
@@ -133,6 +136,15 @@ async function runLoop(): Promise<void> {
       break;
     }
 
+    // Daily limit check
+    const tier = await getCurrentTier();
+    const limitCheck = await checkDailyLimit(tier);
+    if (!limitCheck.allowed) {
+      await skipTask(next.id, limitCheck.message ?? '已达每日免费额度上限，请升级至 Pro');
+      await setRunning(false);
+      break;
+    }
+
     await markTaskRunning(next.id);
 
     // Re-verify the locked tab before each task (it may have been closed or navigated away).
@@ -167,6 +179,7 @@ async function runLoop(): Promise<void> {
       if (res.ok) {
         await markTaskSuccess(next.id);
         successCount++;
+        await incrementDailyCount();
 
         // Chain propagation: pass captured ref to the next waiting task.
         if (settings.chainMode && res.chainCapturedRefId) {

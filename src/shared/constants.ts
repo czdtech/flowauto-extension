@@ -39,6 +39,11 @@ export const MSG = {
   AI_REWRITE: "AI_REWRITE",
   AI_VARIANTS: "AI_VARIANTS",
   TEST_NOTIFICATION: "TEST_NOTIFICATION",
+
+  // License management
+  LICENSE_ACTIVATE: "LICENSE_ACTIVATE",
+  LICENSE_GET_STATUS: "LICENSE_GET_STATUS",
+  LICENSE_CLEAR: "LICENSE_CLEAR",
 } as const;
 
 export type MsgType = (typeof MSG)[keyof typeof MSG];

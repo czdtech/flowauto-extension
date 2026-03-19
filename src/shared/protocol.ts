@@ -8,6 +8,7 @@ import type {
   TaskItem,
   UserSettings,
 } from "./types";
+import type { Tier } from "./feature-gate";
 
 export type ConnectionReason =
   | "no_active_tab"
@@ -263,6 +264,40 @@ export type TestNotificationResponse = {
   error?: string;
 };
 
+// ── License management ──
+
+export type LicenseActivateRequest = {
+  type: typeof MSG.LICENSE_ACTIVATE;
+  key: string;
+};
+
+export type LicenseActivateResponse = {
+  type: typeof MSG.LICENSE_ACTIVATE;
+  ok: boolean;
+  tier?: Tier;
+  error?: string;
+};
+
+export type LicenseGetStatusRequest = {
+  type: typeof MSG.LICENSE_GET_STATUS;
+};
+
+export type LicenseGetStatusResponse = {
+  type: typeof MSG.LICENSE_GET_STATUS;
+  tier: Tier;
+  dailyCount: number;
+  dailyLimit: number;
+};
+
+export type LicenseClearRequest = {
+  type: typeof MSG.LICENSE_CLEAR;
+};
+
+export type LicenseClearResponse = {
+  type: typeof MSG.LICENSE_CLEAR;
+  ok: boolean;
+};
+
 export type AnyRequest =
   | PingRequest
   | GetPageStateRequest
@@ -293,7 +328,10 @@ export type AnyRequest =
   | AiEnhanceRequest
   | AiRewriteRequest
   | AiVariantsRequest
-  | TestNotificationRequest;
+  | TestNotificationRequest
+  | LicenseActivateRequest
+  | LicenseGetStatusRequest
+  | LicenseClearRequest;
 
 export type AnyResponse =
   | PongResponse
@@ -314,4 +352,7 @@ export type AnyResponse =
   | AiEnhanceResponse
   | AiRewriteResponse
   | AiVariantsResponse
-  | TestNotificationResponse;
+  | TestNotificationResponse
+  | LicenseActivateResponse
+  | LicenseGetStatusResponse
+  | LicenseClearResponse;
