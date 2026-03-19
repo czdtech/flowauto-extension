@@ -98,6 +98,23 @@ export const LIMITS = {
 } as const;
 
 // ============================================
+// Stealth Mode
+// ============================================
+
+export const STEALTH = {
+  /** Minimum delay multiplier when stealth is enabled */
+  MULTIPLIER_MIN: 1.5,
+  /** Maximum delay multiplier when stealth is enabled */
+  MULTIPLIER_MAX: 3.0,
+  /** Minimum inter-step pause in stealth mode (ms) */
+  PAUSE_MIN_MS: 500,
+  /** Maximum inter-step pause in stealth mode (ms) */
+  PAUSE_MAX_MS: 2000,
+  /** Hard cap: stealth delay never exceeds original_max × this factor */
+  MAX_SLOWDOWN_FACTOR: 4,
+} as const;
+
+// ============================================
 // Download & Storage
 // ============================================
 
