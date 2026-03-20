@@ -229,9 +229,8 @@
     </div>
   </details>
 
-  {#if isFeatureEnabled('ai_own_key', tier)}
-  <details class="settings">
-    <summary>AI 设置</summary>
+  <details class="settings" class:settings-locked={!isFeatureEnabled('ai_own_key', tier)}>
+    <summary>AI 设置{#if !isFeatureEnabled('ai_own_key', tier)}<span class="lock" title="Pro 专属">🔒</span>{/if}</summary>
     <div class="grid">
       <label>
         <div class="lab">AI 服务商</div>
@@ -239,6 +238,7 @@
           class="sel"
           bind:value={s_aiProvider}
           onchange={(e) => patchAi({ provider: (e.target as HTMLSelectElement).value as AiProviderType })}
+          disabled={!isFeatureEnabled('ai_own_key', tier)}
         >
           <option value="openai">OpenAI</option>
           <option value="gemini">Gemini</option>
@@ -255,6 +255,7 @@
           class="sel"
           bind:value={s_aiModel}
           onchange={(e) => patchAi({ model: (e.target as HTMLSelectElement).value })}
+          disabled={!isFeatureEnabled('ai_own_key', tier)}
         >
           {#if s_aiProvider === 'openai'}
             <option value="gpt-4o-mini">gpt-4o-mini</option>
@@ -274,18 +275,20 @@
           placeholder="输入 API Key"
           bind:value={s_aiApiKey}
           onchange={(e) => patchAi({ apiKey: (e.target as HTMLInputElement).value })}
+          disabled={!isFeatureEnabled('ai_own_key', tier)}
         />
       </label>
       {:else}
       <p class="proxy-hint full-width">使用 FlowAuto 代理，无需 API Key</p>
       {/if}
     </div>
+    {#if !isFeatureEnabled('ai_own_key', tier)}
+      <div class="upgrade-hint">升级至 Pro 解锁</div>
+    {/if}
   </details>
-  {/if}
 
-  {#if isFeatureEnabled('notifications', tier)}
-  <details class="settings">
-    <summary>通知设置</summary>
+  <details class="settings" class:settings-locked={!isFeatureEnabled('notifications', tier)}>
+    <summary>通知设置{#if !isFeatureEnabled('notifications', tier)}<span class="lock" title="Pro+ 专属">🔒</span>{/if}</summary>
     <div class="grid">
       <label>
         <div class="lab">通知方式</div>
@@ -293,6 +296,7 @@
           class="sel"
           bind:value={nProvider}
           onchange={() => saveNotificationSettings()}
+          disabled={!isFeatureEnabled('notifications', tier)}
         >
           <option value="none">无</option>
           <option value="telegram">Telegram</option>
@@ -305,13 +309,15 @@
           <div class="lab">Bot Token</div>
           <input class="inp" type="password" placeholder="输入 Bot Token"
             bind:value={nTelegramBotToken}
-            onchange={() => saveNotificationSettings()} />
+            onchange={() => saveNotificationSettings()}
+            disabled={!isFeatureEnabled('notifications', tier)} />
         </label>
         <label class="full-width">
           <div class="lab">Chat ID</div>
           <input class="inp" type="text" placeholder="输入 Chat ID"
             bind:value={nTelegramChatId}
-            onchange={() => saveNotificationSettings()} />
+            onchange={() => saveNotificationSettings()}
+            disabled={!isFeatureEnabled('notifications', tier)} />
         </label>
       {/if}
 
@@ -320,7 +326,8 @@
           <div class="lab">Webhook URL</div>
           <input class="inp" type="password" placeholder="输入 Discord Webhook URL"
             bind:value={nDiscordWebhookUrl}
-            onchange={() => saveNotificationSettings()} />
+            onchange={() => saveNotificationSettings()}
+            disabled={!isFeatureEnabled('notifications', tier)} />
         </label>
       {/if}
 
@@ -328,14 +335,16 @@
         <label class="toggle-row">
           <div class="lab">队列完成时通知</div>
           <input type="checkbox" bind:checked={nNotifyOnComplete}
-            onchange={() => saveNotificationSettings()} />
+            onchange={() => saveNotificationSettings()}
+            disabled={!isFeatureEnabled('notifications', tier)} />
         </label>
         <label class="toggle-row">
           <div class="lab">任务失败时通知</div>
           <input type="checkbox" bind:checked={nNotifyOnError}
-            onchange={() => saveNotificationSettings()} />
+            onchange={() => saveNotificationSettings()}
+            disabled={!isFeatureEnabled('notifications', tier)} />
         </label>
-        <button class="test-btn" onclick={testNotification} disabled={testStatus === 'sending'}>
+        <button class="test-btn" onclick={testNotification} disabled={!isFeatureEnabled('notifications', tier) || testStatus === 'sending'}>
           {testStatus === 'sending' ? '发送中...' : '测试通知'}
         </button>
         {#if testStatus === 'ok'}
@@ -346,8 +355,10 @@
         {/if}
       {/if}
     </div>
+    {#if !isFeatureEnabled('notifications', tier)}
+      <div class="upgrade-hint">升级至 Pro+ 解锁</div>
+    {/if}
   </details>
-  {/if}
 {/if}
 
 <style>
@@ -418,5 +429,19 @@
   .test-ok { color: rgba(126, 231, 135, 0.9); font-size: 11px; }
   .test-err { color: rgba(255, 100, 100, 0.9); font-size: 11px; }
   .lock { font-size: 10px; margin-left: 4px; opacity: 0.6; }
+  .settings-locked .grid {
+    opacity: 0.4;
+  }
+  .settings-locked .sel:disabled,
+  .settings-locked .inp:disabled {
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .upgrade-hint {
+    font-size: 10px;
+    text-align: center;
+    padding: 6px 0 2px;
+    opacity: 0.35;
+    letter-spacing: 0.2px;
+  }
   .proxy-hint { font-size: 11px; opacity: 0.6; margin: 0; }
 </style>

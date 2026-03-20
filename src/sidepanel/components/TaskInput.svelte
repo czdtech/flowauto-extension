@@ -80,16 +80,14 @@
   </button>
 </div>
 
-{#if hasAiSettings && isFeatureEnabled('ai_own_key', tier)}
-  <div class="ai-row">
-    <button class="btn btn-ai" onclick={onAiEnhance} disabled={aiLoading || !promptText.trim()}>
-      {aiLoading ? '处理中...' : 'AI 增强'}
-    </button>
-    <button class="btn btn-ai" onclick={onAiVariants} disabled={aiLoading || !promptText.trim()}>
-      {aiLoading ? '处理中...' : '生成变体'}
-    </button>
-  </div>
-{/if}
+<div class="ai-row">
+  <button class="btn btn-ai" onclick={onAiEnhance} disabled={!isFeatureEnabled('ai_own_key', tier) || !hasAiSettings || aiLoading || !promptText.trim()}>
+    {aiLoading ? '处理中...' : !isFeatureEnabled('ai_own_key', tier) ? 'AI 增强 🔒' : 'AI 增强'}
+  </button>
+  <button class="btn btn-ai" onclick={onAiVariants} disabled={!isFeatureEnabled('ai_own_key', tier) || !hasAiSettings || aiLoading || !promptText.trim()}>
+    {aiLoading ? '处理中...' : !isFeatureEnabled('ai_own_key', tier) ? '生成变体 🔒' : '生成变体'}
+  </button>
+</div>
 
 {#if s_defaultGenerationType === 'image-to-image' || s_defaultGenerationType === 'image-to-video'}
   <div class="import-row">
@@ -331,7 +329,11 @@
     background: rgba(168, 130, 255, 0.10);
     border-color: rgba(168, 130, 255, 0.30);
   }
-  .btn-ai:hover {
+  .btn-ai:hover:not(:disabled) {
     background: rgba(168, 130, 255, 0.18);
+  }
+  .btn-ai:disabled {
+    background: rgba(168, 130, 255, 0.04);
+    border-color: rgba(168, 130, 255, 0.12);
   }
 </style>
