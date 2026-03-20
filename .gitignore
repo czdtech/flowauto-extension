@@ -25,3 +25,5 @@ dist-ssr
 
 console.txt
 har.txt.worktrees
+.worktrees/
+kpop/
