@@ -177,7 +177,10 @@
       </label>
 
       <label>
-        <div class="lab">下载画质</div>
+        <div class="lab">
+          下载画质
+          {#if !isFeatureEnabled('download_4k', tier)}<span class="lock" title="Pro 专属">🔒</span>{/if}
+        </div>
         <select
           class="sel"
           bind:value={s_defaultDownloadResolution}
@@ -185,7 +188,9 @@
         >
           <option value="1K/720p">1K / 720p</option>
           <option value="2K/1080p">2K / 1080p</option>
-          <option value="4K">4K (需升级)</option>
+          <option value="4K" disabled={!isFeatureEnabled('download_4k', tier)}>
+            {isFeatureEnabled('download_4k', tier) ? '4K' : '4K (Pro 解锁)'}
+          </option>
         </select>
       </label>
 

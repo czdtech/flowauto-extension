@@ -3,6 +3,7 @@ import type { ExecuteTaskRequest, TaskResultResponse } from '../shared/protocol'
 import type { TaskItem } from '../shared/types';
 import { sleep } from '../shared/sleep';
 import { errorMsg, logger } from '../shared/logger';
+import { isFeatureEnabled } from '../shared/feature-gate';
 import {
   getAppState,
   getNextWaitingTask,
@@ -18,12 +19,13 @@ import { tryInjectContentScripts } from './content-injection';
 import { sendMessageToTab } from '../shared/messaging';
 import { TIMEOUTS, STEALTH } from '../shared/config';
 import { createAiProvider } from './ai-providers';
+import { resolveConfiguredAiSettings } from './ai-settings';
 import {
   trySendNotification,
   formatQueueCompleteMessage,
   formatTaskErrorMessage,
 } from './notifier';
-import { getCurrentTier } from './license';
+import { getCurrentTier, getLicense } from './license';
 import { checkDailyLimit, incrementDailyCount } from './daily-counter';
 
 /** Check whether a tab URL points to a Flow project. */
@@ -86,8 +88,10 @@ async function tryAutoRewrite(taskId: string, originalPrompt: string, errorMessa
   if (rewrittenTasks.has(taskId)) return; // Only one rewrite attempt per task
 
   const { settings } = await getAppState();
-  const aiSettings = settings.aiSettings;
-  if (!aiSettings?.apiKey) return;
+  const tier = await getCurrentTier();
+  const license = await getLicense();
+  const aiSettings = resolveConfiguredAiSettings(settings.aiSettings, tier, license?.key);
+  if (!aiSettings) return;
 
   try {
     const provider = createAiProvider(aiSettings);
@@ -152,6 +156,12 @@ async function runLoop(): Promise<void> {
       break;
     }
 
+    const useStealthMode =
+      settings.stealthMode && isFeatureEnabled('stealth_mode', tier);
+    const useChainMode =
+      settings.chainMode && isFeatureEnabled('chain_mode', tier);
+    const notificationsEnabled = isFeatureEnabled('notifications', tier);
+
     await markTaskRunning(next.id);
 
     // Re-verify the locked tab before each task (it may have been closed or navigated away).
@@ -177,8 +187,8 @@ async function runLoop(): Promise<void> {
         {
           type: MSG.EXECUTE_TASK,
           task: next,
-          stealthMode: settings.stealthMode,
-          chainMode: settings.chainMode,
+          stealthMode: useStealthMode,
+          chainMode: useChainMode,
         },
         TIMEOUTS.TASK_EXECUTION
       );
@@ -189,13 +199,13 @@ async function runLoop(): Promise<void> {
         await incrementDailyCount();
 
         // Chain propagation: pass captured ref to the next waiting task.
-        if (settings.chainMode && res.chainCapturedRefId) {
+        if (useChainMode && res.chainCapturedRefId) {
           const nextTask = await getNextWaitingTask();
           if (nextTask) {
             await setChainRef(nextTask.id, res.chainCapturedRefId);
             logger.info(`Chain: propagated ${res.chainCapturedRefId} → task ${nextTask.id.slice(-6)}`);
           }
-        } else if (settings.chainMode && !res.chainCapturedRefId) {
+        } else if (useChainMode && !res.chainCapturedRefId) {
           logger.warn('Chain: failed to capture result, next task will run without chain reference');
         }
       } else {
@@ -215,14 +225,14 @@ async function runLoop(): Promise<void> {
     }
 
     // Immediate error notification
-    if (taskFailed && settings.notificationSettings?.notifyOnError) {
+    if (taskFailed && notificationsEnabled && settings.notificationSettings?.notifyOnError) {
       const msg = formatTaskErrorMessage(next.prompt, taskErrorMsg);
       void trySendNotification(settings.notificationSettings, msg);
     }
 
     // Inter-task delay with optional stealth multiplier.
     const baseDelay = Math.max(0, settings.interTaskDelayMs);
-    const delay = settings.stealthMode
+    const delay = useStealthMode
       ? baseDelay * (STEALTH.MULTIPLIER_MIN + Math.random() * (STEALTH.MULTIPLIER_MAX - STEALTH.MULTIPLIER_MIN))
       : baseDelay;
     await sleep(delay);
@@ -232,8 +242,9 @@ async function runLoop(): Promise<void> {
   const elapsed = Date.now() - startedAt;
   const totalProcessed = successCount + errorCount;
   if (totalProcessed > 0) {
+    const tier = await getCurrentTier();
     const { settings } = await getAppState();
-    if (settings.notificationSettings?.notifyOnComplete) {
+    if (isFeatureEnabled('notifications', tier) && settings.notificationSettings?.notifyOnComplete) {
       const msg = formatQueueCompleteMessage(projectName, successCount, errorCount, elapsed);
       void trySendNotification(settings.notificationSettings, msg);
     }

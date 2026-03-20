@@ -42,27 +42,31 @@
   import { modeForModel } from '../shared/types';
   import type { AiProviderType } from '../shared/ai-provider';
   import type { Tier } from '../shared/feature-gate';
-  import type { GenerationMode, GenerationType, Project, QueueState, TaskAsset, TaskItem, TaskStatus, UserSettings } from '../shared/types';
+  import type { GenerationMode, GenerationType, Project, QueueState, TaskAsset, TaskStatus, UserSettings } from '../shared/types';
   import type {
     LicenseGetStatusRequest,
     LicenseGetStatusResponse,
   } from '../shared/protocol';
 
   type Status = 'checking' | 'connected' | 'disconnected';
+  interface ImportSummary {
+    txtCount: number;
+    imgCount: number;
+    matchedCount: number;
+    promptCount: number;
+    matchedFiles: string[];
+    warnings?: string[];
+  }
 
   let status: Status = $state('checking');
   let reason = $state('');
-  let url = $state('');
   let title = $state('');
-  let lastCheckedAt = $state(0);
   type ActiveTopTab = 'video' | 'image' | 'unknown';
   let activeTopTab: ActiveTopTab = $state('unknown');
 
   let promptText = $state('');
-  let fileInput: HTMLInputElement | undefined;
-  let multiFileInput: HTMLInputElement | undefined;
   let folderImportStatus = $state('');
-  let importSummary: { txtCount: number; imgCount: number; matchedCount: number; promptCount: number; matchedFiles: string[] } | null = $state(null);
+  let importSummary: ImportSummary | null = $state(null);
   let queue: QueueState | null = $state(null);
   let settings: UserSettings | null = $state(null);
   let queueError = $state('');
@@ -352,8 +356,6 @@
     const wasUnknown = status === 'checking';
     try {
       const res = await sendMessage<PingRequest, PongResponse>({ type: MSG.PING });
-      lastCheckedAt = Date.now();
-      url = res.url ?? '';
       title = res.title ?? '';
 
       if (res.connected) {
@@ -659,20 +661,8 @@
     for (const t of visible) c[t.status] = (c[t.status] ?? 0) + 1;
     return c;
   }
-
-  function taskAssetFilenames(t: TaskItem): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const a of t.assets ?? []) {
-      const name = (a.filename || '').trim();
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      result.push(name);
-    }
-    return result;
-  }
   
-  function dismissImportSummary() {
+  function dismissImportSummary(): void {
     importSummary = null;
   }
 
@@ -761,9 +751,9 @@
     />
 
     <TaskInput
-      bind:promptText
-      bind:folderImportStatus
-      bind:importSummary
+      {promptText}
+      {folderImportStatus}
+      {importSummary}
       {s_defaultGenerationType}
       tier={currentTier}
       {handleFileImport}
@@ -776,12 +766,11 @@
       isRunning={!!queue?.isRunning}
       hasError={queue ? counts(queue).error > 0 : false}
       canClearHistory={!!queue && !queue.isRunning && (counts(queue).success + counts(queue).error + counts(queue).skipped) > 0}
-      hasQueue={!!queue}
       onUpdatePrompt={(text) => promptText = text}
       onAiEnhance={handleAiEnhance}
       onAiVariants={handleAiVariants}
       {aiLoading}
-      hasAiSettings={!!s_aiApiKey}
+      hasAiSettings={s_aiProvider === 'proxy' || !!s_aiApiKey.trim()}
     />
 
     {#if queueError}

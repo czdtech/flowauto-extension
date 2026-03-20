@@ -152,8 +152,7 @@
     padding-top: 5px;
     padding-bottom: 5px;
   }
-  .sel option,
-  .sel optgroup {
+  .sel option {
     background: #1e1e1e;
     color: #fff;
   }

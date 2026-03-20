@@ -27,7 +27,6 @@
     isRunning: boolean;
     hasError: boolean;
     canClearHistory: boolean;
-    hasQueue: boolean;
     onUpdatePrompt: (text: string) => void;
     onAiEnhance: () => void;
     onAiVariants: () => void;
@@ -36,8 +35,8 @@
   }
 
   let {
-    promptText = $bindable(),
-    folderImportStatus = $bindable(),
+    promptText,
+    folderImportStatus,
     importSummary,
     s_defaultGenerationType,
     tier,
@@ -51,7 +50,6 @@
     isRunning,
     hasError,
     canClearHistory,
-    hasQueue,
     onUpdatePrompt,
     onAiEnhance,
     onAiVariants,

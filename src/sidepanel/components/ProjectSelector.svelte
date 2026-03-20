@@ -117,8 +117,7 @@
     outline: none;
     font-size: 12px;
   }
-  .project-select option,
-  .project-select optgroup {
+  .project-select option {
     background: #1e1e1e;
     color: #fff;
   }

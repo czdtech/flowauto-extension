@@ -1,5 +1,6 @@
 import { resolveCapabilities } from "../shared/capability-guard";
 import { LIMITS, STORAGE_KEYS, STORAGE_QUOTA_BYTES, STORAGE_QUOTA_WARN_RATIO } from "../shared/config";
+import { isFeatureEnabled } from "../shared/feature-gate";
 import { logger } from "../shared/logger";
 import {
   DEFAULT_QUEUE_STATE,
@@ -14,6 +15,7 @@ import {
 } from "../shared/types";
 import { storageGet, storageSet, storageRemove } from "./storage";
 import { deleteImageBlobs } from "../shared/image-store";
+import { getCurrentTier } from "./license";
 
 // ── Helpers ──
 
@@ -353,6 +355,12 @@ export async function addPrompts(
   modeOverride?: import("../shared/types").GenerationMode,
 ): Promise<{ queue: QueueState; settings: UserSettings }> {
   await ensureInitialized();
+  const tier = await getCurrentTier();
+  const defaultDownloadResolution =
+    settings.defaultDownloadResolution === "4K" &&
+    !isFeatureEnabled("download_4k", tier)
+      ? "2K/1080p"
+      : settings.defaultDownloadResolution;
 
   const newTasks: TaskItem[] = prompts.map((p) => {
     const model = settings.defaultModel;
@@ -369,7 +377,7 @@ export async function addPrompts(
       retries: 0,
       maxRetries: 0,
       createdAt: now(),
-      downloadResolution: settings.defaultDownloadResolution,
+      downloadResolution: defaultDownloadResolution,
       logs: [{ ts: now(), msg: "任务已创建入队" }],
       assets: p.assets,
     };

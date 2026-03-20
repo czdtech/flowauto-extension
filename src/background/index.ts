@@ -84,8 +84,9 @@ import { sendMessageToTab } from "../shared/messaging";
 import { TIMEOUTS } from "../shared/config";
 import { logger } from "../shared/logger";
 import { createAiProvider } from "./ai-providers";
+import { resolveConfiguredAiSettings } from "./ai-settings";
 import { sendNotification } from "./notifier";
-import { activateLicense, getCurrentTier, clearLicense } from "./license";
+import { activateLicense, getCurrentTier, clearLicense, getLicense } from "./license";
 import { getDailyCount } from "./daily-counter";
 import { getDailyLimit } from "../shared/feature-gate";
 
@@ -565,14 +566,16 @@ async function getAiSettingsFromStorage(): Promise<
   import("../shared/ai-provider").AiSettings | undefined
 > {
   const { settings } = await getAppState();
-  return settings.aiSettings;
+  const tier = await getCurrentTier();
+  const license = await getLicense();
+  return resolveConfiguredAiSettings(settings.aiSettings, tier, license?.key);
 }
 
 async function handleAiEnhance(
   req: AiEnhanceRequest,
 ): Promise<AiEnhanceResponse> {
   const aiSettings = await getAiSettingsFromStorage();
-  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  if (!aiSettings) return { ok: false, error: "未配置 AI 设置" };
   try {
     const provider = createAiProvider(aiSettings);
     const enhanced = await provider.enhance(req.prompt);
@@ -587,7 +590,7 @@ async function handleAiRewrite(
   req: AiRewriteRequest,
 ): Promise<AiRewriteResponse> {
   const aiSettings = await getAiSettingsFromStorage();
-  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  if (!aiSettings) return { ok: false, error: "未配置 AI 设置" };
   try {
     const provider = createAiProvider(aiSettings);
     const rewritten = await provider.rewrite(req.prompt, req.errorMessage);
@@ -602,7 +605,7 @@ async function handleAiVariants(
   req: AiVariantsRequest,
 ): Promise<AiVariantsResponse> {
   const aiSettings = await getAiSettingsFromStorage();
-  if (!aiSettings?.apiKey) return { ok: false, error: "未配置 AI 设置" };
+  if (!aiSettings) return { ok: false, error: "未配置 AI 设置" };
   try {
     const provider = createAiProvider(aiSettings);
     const variants = await provider.variants(req.prompt, req.count);
