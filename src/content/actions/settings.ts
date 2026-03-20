@@ -123,10 +123,16 @@ export async function setMode(mode: GenerationMode): Promise<void> {
 // Aspect ratio
 // ---------------------------------------------------------------------------
 
+const ASPECT_RATIO_KEYWORDS: Record<AspectRatio, readonly string[]> = {
+  "16:9": KEYWORDS.aspect_16_9,
+  "4:3": KEYWORDS.aspect_4_3,
+  "1:1": KEYWORDS.aspect_1_1,
+  "3:4": KEYWORDS.aspect_3_4,
+  "9:16": KEYWORDS.aspect_9_16,
+};
+
 export async function setAspectRatio(aspectRatio: AspectRatio): Promise<void> {
-  const keywords =
-    aspectRatio === "16:9" ? KEYWORDS.aspectLandscape : KEYWORDS.aspectPortrait;
-  await clickTabByKeywords(keywords);
+  await clickTabByKeywords(ASPECT_RATIO_KEYWORDS[aspectRatio]);
 }
 
 // ---------------------------------------------------------------------------

@@ -138,8 +138,11 @@
           bind:value={s_defaultAspectRatio}
           onchange={(e) => patchSettings({ defaultAspectRatio: (e.target as HTMLSelectElement).value as UserSettings['defaultAspectRatio'] })}
         >
-          <option value="9:16">9:16</option>
           <option value="16:9">16:9</option>
+          <option value="4:3">4:3</option>
+          <option value="1:1">1:1</option>
+          <option value="3:4">3:4</option>
+          <option value="9:16">9:16</option>
         </select>
       </label>
 

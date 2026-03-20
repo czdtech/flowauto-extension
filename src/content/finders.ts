@@ -226,6 +226,9 @@ export function findSettingsToggle(): HTMLButtonElement | null {
       name.includes("imagen") ||
       name.includes("veo") ||
       name.includes("16:9") ||
+      name.includes("4:3") ||
+      name.includes("1:1") ||
+      name.includes("3:4") ||
       name.includes("9:16") ||
       name.includes("crop")
     ) {

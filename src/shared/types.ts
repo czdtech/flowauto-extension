@@ -36,7 +36,7 @@ export function modeForModel(model: AnyModel): GenerationMode {
   return isImageModel(model) ? "create-image" : "text-to-video";
 }
 
-export type AspectRatio = "16:9" | "9:16";
+export type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 
 /**
  * Unified download resolution selection.
