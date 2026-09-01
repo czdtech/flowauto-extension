@@ -77,7 +77,7 @@
 
   let s_defaultModel: UserSettings['defaultModel'] = $state('nano-banana-2');
   let s_defaultGenerationType: GenerationType = $state('text-to-image');
-  let s_defaultAspectRatio: '16:9' | '9:16' = $state('9:16');
+  let s_defaultAspectRatio: UserSettings['defaultAspectRatio'] = $state('9:16');
   let s_defaultOutputCount = $state(1);
   let s_defaultDownloadResolution: UserSettings['defaultDownloadResolution'] = $state('2K/1080p');
   let s_interTaskDelayMs = $state(5000);
